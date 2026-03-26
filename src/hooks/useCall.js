@@ -9,6 +9,7 @@ export function useCall() {
   const [remoteStream, setRemoteStream] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const activeCallListenersRef = useRef(null);
   const activeCallRef = useRef(null);
 
@@ -36,10 +37,23 @@ export function useCall() {
 
   const syncStreamsFromCall = (call) => {
     if (!call) return;
-    setLocalStream(call.localUsermediaStream || null);
-    setRemoteStream(call.remoteUsermediaStream || null);
+
+    const localPrimaryStream =
+      (call.isScreensharing && call.isScreensharing() && call.localScreensharingStream) ||
+      call.localUsermediaStream ||
+      call.localScreensharingStream ||
+      null;
+
+    const remotePrimaryStream =
+      call.remoteScreensharingStream ||
+      call.remoteUsermediaStream ||
+      null;
+
+    setLocalStream(localPrimaryStream);
+    setRemoteStream(remotePrimaryStream);
     setIsMuted(call.isMicrophoneMuted());
     setIsVideoOff(call.isLocalVideoMuted());
+    setIsScreenSharing(Boolean(call.isScreensharing && call.isScreensharing()));
   };
 
   const bindActiveCallListeners = (call) => {
@@ -110,6 +124,7 @@ export function useCall() {
          setRemoteStream(null);
          setIsMuted(false);
          setIsVideoOff(false);
+         setIsScreenSharing(false);
       }
     });
 
@@ -171,6 +186,7 @@ export function useCall() {
     setRemoteStream(null);
     setIsMuted(false);
     setIsVideoOff(false);
+    setIsScreenSharing(false);
   };
 
 
@@ -199,6 +215,18 @@ export function useCall() {
     }
   };
 
+  const toggleScreenShare = async () => {
+    if (!activeCall) return;
+
+    try {
+      const enabled = await activeCall.setScreensharingEnabled(!activeCall.isScreensharing());
+      setIsScreenSharing(enabled);
+      syncStreamsFromCall(activeCall);
+    } catch (e) {
+      console.error("Failed to toggle screen sharing:", e);
+    }
+  };
+
 
   return {
     incomingCall,
@@ -208,11 +236,13 @@ export function useCall() {
     remoteStream,
     isMuted,
     isVideoOff,
+    isScreenSharing,
     placeCall,
     answerCall,
     rejectCall,
     endCall,
     toggleMute,
-    toggleVideo
+    toggleVideo,
+    toggleScreenShare
   };
 }

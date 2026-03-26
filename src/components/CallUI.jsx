@@ -1,14 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, ScreenShare, ScreenShareOff } from 'lucide-react';
 
 export default function CallUI({
   localStream,
   remoteStream,
   isMuted,
   isVideoOff,
+  isScreenSharing,
   callState,
   toggleMute,
   toggleVideo,
+  toggleScreenShare,
   endCall,
 }) {
   const localVideoRef = useRef(null);
@@ -74,6 +76,7 @@ export default function CallUI({
   useEffect(() => trackVideoState(localStream, setHasLocalVideo), [localStream]);
   useEffect(() => trackVideoState(remoteStream, setHasRemoteVideo), [remoteStream]);
   const showRemoteCameraStatus = !hasRemoteVideo && !isVideoOff;
+  const isAudioMode = isVideoOff && !hasLocalVideo && !hasRemoteVideo && !isScreenSharing;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -105,10 +108,26 @@ export default function CallUI({
       <div className={`remote-video-wrapper ${hasRemoteVideo ? 'has-video' : 'no-video'}`}>
         <video
           ref={remoteVideoRef}
-          className="remote-video"
+          className={`remote-video ${isAudioMode ? 'audio-hidden' : ''}`}
           autoPlay
           playsInline
         />
+        {isAudioMode && (
+          <div className="audio-mode-overlay">
+            <div className="audio-pulse-ring ring-one" />
+            <div className="audio-pulse-ring ring-two" />
+            <div className="audio-pulse-ring ring-three" />
+            <div className="audio-core">
+              <div className={`audio-core-icon ${isMuted ? 'muted' : ''}`}>
+                {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
+              </div>
+              <p className="audio-core-title">Secure Audio Call</p>
+              <p className="audio-core-subtitle">
+                {callState === 'calling' ? 'Connecting...' : 'Voice channel active'}
+              </p>
+            </div>
+          </div>
+        )}
         {showRemoteCameraStatus && (
           <div className="call-status-overlay">
             {callState === 'calling' ? 'Calling...' : 'Remote camera is off'}
@@ -144,6 +163,14 @@ export default function CallUI({
           className={`control-btn ${isVideoOff ? 'muted' : ''}`}
         >
           {isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
+        </button>
+
+        <button
+          onClick={toggleScreenShare}
+          className={`control-btn ${isScreenSharing ? 'active' : ''}`}
+          title={isScreenSharing ? "Stop screen share" : "Share screen"}
+        >
+          {isScreenSharing ? <ScreenShareOff size={24} /> : <ScreenShare size={24} />}
         </button>
 
         <button className="control-btn hangup-btn" onClick={endCall}>

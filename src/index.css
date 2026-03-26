@@ -286,6 +286,86 @@ body {
   background: #000;
 }
 
+.remote-video.audio-hidden {
+  opacity: 0;
+}
+
+.audio-mode-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.audio-pulse-ring {
+  position: absolute;
+  width: clamp(170px, 28vw, 300px);
+  aspect-ratio: 1 / 1;
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 168, 132, 0.32);
+  background: radial-gradient(circle, rgba(0, 168, 132, 0.12) 0%, rgba(0, 168, 132, 0.03) 55%, transparent 70%);
+  animation: audioPulseRing 4.4s ease-in-out infinite;
+}
+
+.audio-pulse-ring.ring-two {
+  animation-delay: 0.8s;
+}
+
+.audio-pulse-ring.ring-three {
+  animation-delay: 1.6s;
+}
+
+.audio-core {
+  position: relative;
+  z-index: 2;
+  min-width: 230px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  text-align: center;
+  background: linear-gradient(145deg, rgba(12, 20, 28, 0.92), rgba(19, 38, 53, 0.9));
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.42);
+}
+
+.audio-core-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d1fae5;
+  background: rgba(0, 168, 132, 0.22);
+  border: 1px solid rgba(52, 211, 153, 0.42);
+}
+
+.audio-core-icon.muted {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.audio-core-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #e2e8f0;
+  margin-bottom: 6px;
+}
+
+.audio-core-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+@keyframes audioPulseRing {
+  0%, 100% { transform: scale(0.92); opacity: 0.42; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
 .call-status-overlay {
   position: absolute;
   top: 50%;
@@ -362,6 +442,7 @@ body {
 
 .control-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .control-btn.muted { background: white; color: #111; }
+.control-btn.active { background: var(--accent-blue); color: #fff; }
 .control-btn.hangup-btn { background: var(--danger); }
 .control-btn.hangup-btn:hover { background: var(--danger-hover); }
 

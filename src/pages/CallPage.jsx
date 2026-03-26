@@ -17,12 +17,14 @@ export default function CallPage({ onLogout }) {
     remoteStream,
     isMuted,
     isVideoOff,
+    isScreenSharing,
     placeCall,
     answerCall,
     rejectCall,
     endCall,
     toggleMute,
-    toggleVideo
+    toggleVideo,
+    toggleScreenShare
   } = useCall();
 
   useEffect(() => {
@@ -102,9 +104,11 @@ export default function CallPage({ onLogout }) {
           remoteStream={remoteStream}
           isMuted={isMuted}
           isVideoOff={isVideoOff}
+          isScreenSharing={isScreenSharing}
           callState={callState}
           toggleMute={toggleMute}
           toggleVideo={toggleVideo}
+          toggleScreenShare={toggleScreenShare}
           endCall={endCall}
         />
       )}
