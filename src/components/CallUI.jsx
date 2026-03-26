@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
 
 export default function CallUI({
@@ -13,8 +13,67 @@ export default function CallUI({
 }) {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
-  const hasRemoteVideo = Boolean(remoteStream?.getVideoTracks().some((track) => track.readyState === 'live'));
-  const hasLocalVideo = Boolean(localStream?.getVideoTracks().some((track) => track.readyState === 'live'));
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
+  const [hasLocalVideo, setHasLocalVideo] = useState(false);
+
+  const hasActiveVideo = (stream) =>
+    Boolean(
+      stream?.getVideoTracks().some(
+        (track) => track.readyState === 'live' && !track.muted,
+      ),
+    );
+
+  const trackVideoState = (stream, setState) => {
+    if (!stream) {
+      setState(false);
+      return () => {};
+    }
+
+    const cleanupFns = [];
+
+    const refresh = () => {
+      setState(hasActiveVideo(stream));
+    };
+
+    const attachTrackListeners = (track) => {
+      if (track.kind !== 'video') return;
+
+      const onTrackStateChanged = () => refresh();
+      track.addEventListener('mute', onTrackStateChanged);
+      track.addEventListener('unmute', onTrackStateChanged);
+      track.addEventListener('ended', onTrackStateChanged);
+
+      cleanupFns.push(() => {
+        track.removeEventListener('mute', onTrackStateChanged);
+        track.removeEventListener('unmute', onTrackStateChanged);
+        track.removeEventListener('ended', onTrackStateChanged);
+      });
+    };
+
+    stream.getVideoTracks().forEach(attachTrackListeners);
+
+    const onTrackAdded = (event) => {
+      attachTrackListeners(event.track);
+      refresh();
+    };
+
+    const onTrackRemoved = () => refresh();
+    stream.addEventListener('addtrack', onTrackAdded);
+    stream.addEventListener('removetrack', onTrackRemoved);
+
+    cleanupFns.push(() => {
+      stream.removeEventListener('addtrack', onTrackAdded);
+      stream.removeEventListener('removetrack', onTrackRemoved);
+    });
+
+    refresh();
+
+    return () => cleanupFns.forEach((fn) => fn());
+  };
+
+  useEffect(() => trackVideoState(localStream, setHasLocalVideo), [localStream]);
+  useEffect(() => trackVideoState(remoteStream, setHasRemoteVideo), [remoteStream]);
+  const showRemoteCameraStatus = !hasRemoteVideo && !isVideoOff;
 
   useEffect(() => {
     if (!localVideoRef.current) return;
@@ -50,7 +109,7 @@ export default function CallUI({
           autoPlay
           playsInline
         />
-        {!hasRemoteVideo && (
+        {showRemoteCameraStatus && (
           <div className="call-status-overlay">
             {callState === 'calling' ? 'Calling...' : 'Remote camera is off'}
           </div>
@@ -66,7 +125,7 @@ export default function CallUI({
           playsInline
           muted
         />
-        {!hasLocalVideo && (
+        {!hasLocalVideo && isVideoOff && (
           <div className="local-video-placeholder">Camera Off</div>
         )}
       </div>
