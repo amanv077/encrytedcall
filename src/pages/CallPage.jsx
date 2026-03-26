@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { matrixManager } from '../services/matrixClient';
 import { useCall } from '../hooks/useCall';
 import IncomingCallModal from '../components/IncomingCallModal';
 import CallUI from '../components/CallUI';
+import { Phone, Video, LogOut } from 'lucide-react';
 
-export default function CallPage() {
-  const [isReady, setIsReady] = useState(false);
+export default function CallPage({ onLogout }) {
+  const [isReady, setIsReady] = useState(matrixManager.isReady);
   const [roomIdInput, setRoomIdInput] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const initAttempted = useRef(false);
   
   const {
     incomingCall,
@@ -27,59 +26,74 @@ export default function CallPage() {
   } = useCall();
 
   useEffect(() => {
-    if (initAttempted.current) return;
-    initAttempted.current = true;
+    // Poll for ready state if not already ready
+    if (!isReady) {
+      const interval = setInterval(() => {
+        if (matrixManager.isReady) {
+          setIsReady(true);
+          clearInterval(interval);
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [isReady]);
 
-    // Initialize Matrix when the page mounts
-    matrixManager.initAndLogin()
-
-      .then((client) => {
-        if (client) setIsReady(true);
-        else setErrorMsg('Matrix configuration missing or invalid in .env variables.');
-      })
-      .catch((err) => {
-        setErrorMsg('Failed to login. Ensure credentials are correct and Matrix server is reachable.');
-        console.error(err);
-      });
-  }, []);
-
-  const handleCall = () => {
+  const handleCall = (video = true) => {
     if (!roomIdInput.trim()) {
       alert("Please enter a valid User ID or Room ID");
       return;
     }
-    placeCall(roomIdInput);
+    placeCall(roomIdInput, video);
   };
 
   return (
     <div className="call-page">
-      <div className="status-badge">
-        {!isReady && !errorMsg && <span className="connecting">🟡 Connecting to Matrix...</span>}
-        {isReady && <span className="connected">🟢 Matrix Connected</span>}
-        {errorMsg && <span className="error">🔴 {errorMsg}</span>}
+      <div className="top-bar">
+        <div className="status-badge-inline">
+          {isReady ? (
+            <span className="connected">🟢 Secure Line Active</span>
+          ) : (
+            <span className="connecting">🟡 Establishing Connection...</span>
+          )}
+        </div>
+        <button className="logout-btn" onClick={onLogout} title="Logout">
+          <LogOut size={20} />
+        </button>
       </div>
 
-      {/* If entirely idle or just connecting, show the dialer */}
+      {/* Dialer UI */}
       {callState === 'idle' ? (
         <div className="dialer-container">
           <h2>Secure Healthcare Communications</h2>
-          <p>End-to-end encrypted Audio/Video module</p>
+          <p>E2EE Audio/Video Call Module</p>
+          
           <div className="dialer-box">
              <input 
                type="text" 
-               placeholder="Enter Matrix User ID or Room ID (e.g. @user:matrix.org)"
+               placeholder="Enter Matrix User ID (@user:server.org)"
                value={roomIdInput}
                onChange={(e) => setRoomIdInput(e.target.value)}
-               disabled={!isReady}
              />
-             <button 
-               className="btn-primary" 
-               onClick={handleCall}
-               disabled={!isReady}
-               style={{ opacity: !isReady ? 0.5 : 1, cursor: !isReady ? 'not-allowed' : 'pointer' }}
-             >
-               Start Video Call
-             </button>
+             
+             <div className="call-actions">
+               <button 
+                 className="btn-call audio" 
+                 onClick={() => handleCall(false)}
+                 disabled={!isReady}
+               >
+                 <Phone size={20} />
+                 <span>Audio Call</span>
+               </button>
+               
+               <button 
+                 className="btn-call video" 
+                 onClick={() => handleCall(true)}
+                 disabled={!isReady}
+               >
+                 <Video size={20} />
+                 <span>Video Call</span>
+               </button>
+             </div>
           </div>
         </div>
       ) : (

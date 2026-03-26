@@ -29,28 +29,57 @@ class CallService {
     });
   }
 
-  async placeCall(roomId, video = true) {
+  async placeCall(targetId, video = true) {
     const client = matrixManager.getClient();
     if (!client) throw new Error("Matrix client not initialized.");
     
+    let roomId = targetId;
+
+    // If targetId is a User ID (starts with @), we need to ensure a room exists
+    if (targetId.startsWith('@')) {
+        console.log("Target is a User ID, finding/creating DM room...");
+        // Look for existing direct room
+        const rooms = client.getRooms();
+        const existingRoom = rooms.find(r => {
+            const members = r.getJoinedMembers();
+            return members.length === 2 && members.some(m => m.userId === targetId);
+        });
+
+        if (existingRoom) {
+            roomId = existingRoom.roomId;
+        } else {
+            // Create new DM room
+            const createRes = await client.createRoom({
+                invite: [targetId],
+                is_direct: true,
+                preset: 'trusted_private_chat',
+                visibility: 'private',
+            });
+            roomId = createRes.room_id;
+            console.log("Created new DM room:", roomId);
+        }
+    }
+
     // matrix-js-sdk createCall logic
     const call = sdk.createNewMatrixCall(client, roomId);
     if (!call) throw new Error("Failed to create call.");
+
     
     this.currentCall = call;
     this._bindCallEvents(call);
 
     try {
-      await call.placeVideoCall(
-        // You can fetch remote video element reference inside the UI hook or pass here
-      );
-      // Actually placeVideoCall does not take args in newer sdk directly, it uses setLocalVideoElement / setRemoteVideoElement
-      // We will handle attachments in the hook.
+      if (video) {
+        await call.placeVideoCall();
+      } else {
+        await call.placeVoiceCall();
+      }
     } catch (e) {
       console.error("Call failed:", e);
       this.currentCall = null;
       throw e;
     }
+
 
     return call;
   }
@@ -60,13 +89,20 @@ class CallService {
       this._notifyListeners({ type: "state", call, state });
     });
     call.on("hangup", () => {
-      this.currentCall = null;
+      if (this.currentCall === call) this.currentCall = null;
       this._notifyListeners({ type: "hangup", call });
     });
     call.on("error", (err) => {
-      this.currentCall = null;
+      if (this.currentCall === call) this.currentCall = null;
       this._notifyListeners({ type: "error", call, error: err });
     });
+    call.on("state", (state) => {
+      if (state === 'ended') {
+          if (this.currentCall === call) this.currentCall = null;
+      }
+      this._notifyListeners({ type: "state", call, state });
+    });
+
   }
 
   subscribe(listener) {

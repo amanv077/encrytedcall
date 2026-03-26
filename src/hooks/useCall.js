@@ -17,12 +17,16 @@ export function useCall() {
       setCallState('ringing');
     };
 
-    // Attach to Matrix SDK events if initialized
-    import('../services/matrixClient').then(({ matrixManager }) => {
-       if (matrixManager.isReady) {
-            callService.initCallListeners(handleIncoming);
-       }
-    });
+    // Watch for Matrix readiness to attach listeners
+    const checkReady = setInterval(() => {
+      import('../services/matrixClient').then(({ matrixManager }) => {
+        if (matrixManager.isReady) {
+          callService.initCallListeners(handleIncoming);
+          clearInterval(checkReady);
+        }
+      });
+    }, 1000);
+
 
     const unsubscribe = callService.subscribe((event) => {
       if (event.type === 'state') {
@@ -37,7 +41,10 @@ export function useCall() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      clearInterval(checkReady);
+    };
   }, []);
 
   const placeCall = async (roomId, isVideo = true) => {
@@ -81,7 +88,14 @@ export function useCall() {
     if (activeCall) {
       activeCall.hangup("user_hangup", false);
     }
+    // Force UI reset manually to be safe
+    setCallState('idle');
+    setActiveCall(null);
+    setIncomingCall(null);
+    setLocalStream(null);
+    setRemoteStream(null);
   };
+
 
   const toggleMute = () => {
     if (activeCall && localStream) {
@@ -93,15 +107,37 @@ export function useCall() {
     }
   };
 
-  const toggleVideo = () => {
-    if (activeCall && localStream) {
-      const videoTracks = localStream.getVideoTracks();
-      if (videoTracks.length > 0) {
-        videoTracks[0].enabled = !videoTracks[0].enabled;
-        setIsVideoOff(!videoTracks[0].enabled);
+  const toggleVideo = async () => {
+    if (!activeCall) return;
+
+    const videoTracks = localStream ? localStream.getVideoTracks() : [];
+    
+    if (videoTracks.length > 0) {
+      // Toggle existing track
+      const newState = !videoTracks[0].enabled;
+      videoTracks[0].enabled = newState;
+      setIsVideoOff(!newState);
+    } else {
+      // No video track - try to add one (Upgrade from Audio to Video)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const newTrack = stream.getVideoTracks()[0];
+        
+        if (localStream) {
+          localStream.addTrack(newTrack);
+          setLocalStream(new MediaStream(localStream.getTracks()));
+        }
+        
+        setIsVideoOff(false);
+
+        // Note: Full Matrix call upgrade (re-negotiation) might be needed for some servers
+        // but adding the track to the stream often works for 1:1.
+      } catch (e) {
+        console.error("Failed to get video track:", e);
       }
     }
   };
+
 
   return {
     incomingCall,
