@@ -9,6 +9,75 @@ export function useCall() {
   const [remoteStream, setRemoteStream] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const activeCallListenersRef = useRef(null);
+  const activeCallRef = useRef(null);
+
+  const clearActiveCallListeners = () => {
+    const listeners = activeCallListenersRef.current;
+    if (!listeners) return;
+
+    listeners.call.removeListener("feeds_changed", listeners.onFeedsChanged);
+    listeners.call.removeListener("state", listeners.onStateChanged);
+    activeCallListenersRef.current = null;
+  };
+
+  const hangupActiveCallForExit = () => {
+    const call = activeCallRef.current;
+    if (!call) return;
+
+    try {
+      if (!call.callHasEnded()) {
+        call.hangup("user_hangup", true);
+      }
+    } catch (e) {
+      console.warn("Failed to hang up active call during page exit:", e);
+    }
+  };
+
+  const syncStreamsFromCall = (call) => {
+    if (!call) return;
+    setLocalStream(call.localUsermediaStream || null);
+    setRemoteStream(call.remoteUsermediaStream || null);
+    setIsMuted(call.isMicrophoneMuted());
+    setIsVideoOff(call.isLocalVideoMuted());
+  };
+
+  const bindActiveCallListeners = (call) => {
+    clearActiveCallListeners();
+    if (!call) return;
+
+    const onFeedsChanged = () => {
+      syncStreamsFromCall(call);
+    };
+
+    const onStateChanged = (state) => {
+      if (state === 'connected' || state === 'connecting') {
+        syncStreamsFromCall(call);
+      }
+    };
+
+    call.on("feeds_changed", onFeedsChanged);
+    call.on("state", onStateChanged);
+    activeCallListenersRef.current = { call, onFeedsChanged, onStateChanged };
+  };
+
+  useEffect(() => {
+    activeCallRef.current = activeCall;
+  }, [activeCall]);
+
+  useEffect(() => {
+    const handlePageExit = () => {
+      hangupActiveCallForExit();
+    };
+
+    window.addEventListener('pagehide', handlePageExit);
+    window.addEventListener('beforeunload', handlePageExit);
+
+    return () => {
+      window.removeEventListener('pagehide', handlePageExit);
+      window.removeEventListener('beforeunload', handlePageExit);
+    };
+  }, []);
 
   useEffect(() => {
     // Listen for incoming calls
@@ -33,15 +102,20 @@ export function useCall() {
          setCallState(event.state);
       }
       if (event.type === 'hangup' || event.type === 'error') {
+         clearActiveCallListeners();
          setCallState('idle');
          setActiveCall(null);
          setIncomingCall(null);
          setLocalStream(null);
          setRemoteStream(null);
+         setIsMuted(false);
+         setIsVideoOff(false);
       }
     });
 
     return () => {
+      hangupActiveCallForExit();
+      clearActiveCallListeners();
       unsubscribe();
       clearInterval(checkReady);
     };
@@ -52,9 +126,8 @@ export function useCall() {
       const call = await callService.placeCall(roomId, isVideo);
       setActiveCall(call);
       setCallState('calling');
-      // Setup streams
-      if (call.localUsermediaStream) setLocalStream(call.localUsermediaStream);
-      if (call.remoteUsermediaStream) setRemoteStream(call.remoteUsermediaStream);
+      bindActiveCallListeners(call);
+      syncStreamsFromCall(call);
     } catch (e) {
       console.error(e);
       setCallState('idle');
@@ -64,12 +137,13 @@ export function useCall() {
   const answerCall = async () => {
     if (incomingCall) {
       try {
-        await incomingCall.answer();
+        // Explicitly answer with video only when the incoming invite includes video.
+        await incomingCall.answer(true, incomingCall.hasRemoteUserMediaVideoTrack);
         setActiveCall(incomingCall);
         setIncomingCall(null);
         setCallState('connected');
-        if (incomingCall.localUsermediaStream) setLocalStream(incomingCall.localUsermediaStream);
-        if (incomingCall.remoteUsermediaStream) setRemoteStream(incomingCall.remoteUsermediaStream);
+        bindActiveCallListeners(incomingCall);
+        syncStreamsFromCall(incomingCall);
       } catch (e) {
          console.error(e);
       }
@@ -88,53 +162,40 @@ export function useCall() {
     if (activeCall) {
       activeCall.hangup("user_hangup", false);
     }
+    clearActiveCallListeners();
     // Force UI reset manually to be safe
     setCallState('idle');
     setActiveCall(null);
     setIncomingCall(null);
     setLocalStream(null);
     setRemoteStream(null);
+    setIsMuted(false);
+    setIsVideoOff(false);
   };
 
 
-  const toggleMute = () => {
-    if (activeCall && localStream) {
-      const audioTracks = localStream.getAudioTracks();
-      if (audioTracks.length > 0) {
-        audioTracks[0].enabled = !audioTracks[0].enabled;
-        setIsMuted(!audioTracks[0].enabled);
-      }
+  const toggleMute = async () => {
+    if (!activeCall) return;
+
+    try {
+      const muted = await activeCall.setMicrophoneMuted(!activeCall.isMicrophoneMuted());
+      setIsMuted(muted);
+      syncStreamsFromCall(activeCall);
+    } catch (e) {
+      console.error("Failed to toggle microphone:", e);
     }
   };
 
   const toggleVideo = async () => {
     if (!activeCall) return;
 
-    const videoTracks = localStream ? localStream.getVideoTracks() : [];
-    
-    if (videoTracks.length > 0) {
-      // Toggle existing track
-      const newState = !videoTracks[0].enabled;
-      videoTracks[0].enabled = newState;
-      setIsVideoOff(!newState);
-    } else {
-      // No video track - try to add one (Upgrade from Audio to Video)
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const newTrack = stream.getVideoTracks()[0];
-        
-        if (localStream) {
-          localStream.addTrack(newTrack);
-          setLocalStream(new MediaStream(localStream.getTracks()));
-        }
-        
-        setIsVideoOff(false);
-
-        // Note: Full Matrix call upgrade (re-negotiation) might be needed for some servers
-        // but adding the track to the stream often works for 1:1.
-      } catch (e) {
-        console.error("Failed to get video track:", e);
-      }
+    try {
+      // setLocalVideoMuted(false) performs the SDK upgrade/renegotiation path.
+      const muted = await activeCall.setLocalVideoMuted(!activeCall.isLocalVideoMuted());
+      setIsVideoOff(muted);
+      syncStreamsFromCall(activeCall);
+    } catch (e) {
+      console.error("Failed to toggle video:", e);
     }
   };
 

@@ -13,36 +13,52 @@ export default function CallUI({
 }) {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const hasRemoteVideo = Boolean(remoteStream?.getVideoTracks().some((track) => track.readyState === 'live'));
+  const hasLocalVideo = Boolean(localStream?.getVideoTracks().some((track) => track.readyState === 'live'));
 
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (!localVideoRef.current) return;
+
+    localVideoRef.current.srcObject = localStream || null;
+    if (localStream) {
+      localVideoRef.current.play().catch(() => {});
+      const onTrackAdded = () => localVideoRef.current?.play().catch(() => {});
+      localStream.addEventListener('addtrack', onTrackAdded);
+      return () => localStream.removeEventListener('addtrack', onTrackAdded);
     }
   }, [localStream]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
+    if (!remoteVideoRef.current) return;
+
+    remoteVideoRef.current.srcObject = remoteStream || null;
+    if (remoteStream) {
+      remoteVideoRef.current.play().catch(() => {});
+      const onTrackAdded = () => remoteVideoRef.current?.play().catch(() => {});
+      remoteStream.addEventListener('addtrack', onTrackAdded);
+      return () => remoteStream.removeEventListener('addtrack', onTrackAdded);
     }
   }, [remoteStream]);
 
   return (
     <div className="call-ui-container">
       {/* Remote Video (Full Screen) */}
-      <div className="remote-video-wrapper">
+      <div className={`remote-video-wrapper ${hasRemoteVideo ? 'has-video' : 'no-video'}`}>
         <video
           ref={remoteVideoRef}
           className="remote-video"
           autoPlay
           playsInline
         />
-        {(!remoteStream && callState === 'calling') && (
-            <div className="call-status-overlay">Calling...</div>
+        {!hasRemoteVideo && (
+          <div className="call-status-overlay">
+            {callState === 'calling' ? 'Calling...' : 'Remote camera is off'}
+          </div>
         )}
       </div>
 
       {/* Local Video (Picture-in-Picture) */}
-      <div className="local-video-wrapper">
+      <div className={`local-video-wrapper ${hasLocalVideo ? 'has-video' : 'no-video'}`}>
         <video
           ref={localVideoRef}
           className="local-video"
@@ -50,6 +66,9 @@ export default function CallUI({
           playsInline
           muted
         />
+        {!hasLocalVideo && (
+          <div className="local-video-placeholder">Camera Off</div>
+        )}
       </div>
 
       {/* Call Controls Overlay */}
