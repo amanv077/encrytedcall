@@ -225,6 +225,16 @@ body {
   gap: 16px;
 }
 
+.dialer-notice {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: #d1fae5;
+  background: rgba(0, 168, 132, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
 .btn-call {
   display: flex;
   flex-direction: column;
@@ -677,6 +687,67 @@ body {
 
 .sidebar-item:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.invite-card {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.invite-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.invite-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.invite-action-btn {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s, background 0.2s;
+}
+
+.invite-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.invite-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.invite-action-btn.accept {
+  background: rgba(16, 185, 129, 0.85);
+}
+
+.invite-action-btn.accept:hover:not(:disabled) {
+  background: rgba(5, 150, 105, 0.9);
+}
+
+.invite-action-btn.decline {
+  background: rgba(239, 68, 68, 0.85);
+}
+
+.invite-action-btn.decline:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.9);
 }
 
 .item-avatar {

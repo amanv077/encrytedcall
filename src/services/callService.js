@@ -48,15 +48,21 @@ class CallService {
     // If targetId is a User ID (starts with @), we need to ensure a room exists
     if (targetId.startsWith('@')) {
         console.log("Target is a User ID, finding/creating DM room...");
-        // Look for existing direct room
+        // Look for existing 1:1-ish room that includes the target.
         const rooms = client.getRooms();
         const existingRoom = rooms.find(r => {
-            const members = r.getJoinedMembers();
-            return members.length === 2 && members.some(m => m.userId === targetId);
+            if (r.getMyMembership && r.getMyMembership() !== 'join') return false;
+            const joinedCount = r.getJoinedMembers().length;
+            if (joinedCount > 2) return false;
+            return Boolean(r.getMember(targetId));
         });
 
         if (existingRoom) {
             roomId = existingRoom.roomId;
+            const targetMembership = existingRoom.getMember(targetId)?.membership;
+            if (targetMembership !== 'join') {
+              throw new Error("Invite sent. Ask the user to accept the room invite before calling.");
+            }
         } else {
             // Create new DM room
             const createRes = await client.createRoom({
@@ -67,6 +73,8 @@ class CallService {
             });
             roomId = createRes.room_id;
             console.log("Created new DM room:", roomId);
+            // The invited user must join the room before they can receive room-based call signaling.
+            throw new Error("Invite sent. Ask the user to accept the room invite before calling.");
         }
     }
 

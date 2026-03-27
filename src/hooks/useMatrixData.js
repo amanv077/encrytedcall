@@ -59,12 +59,14 @@ export function useMatrixData() {
     client.on('sync', onSync);
     client.on('Room.name', updateData);
     client.on('RoomState.members', updateData);
+    client.on('Room.myMembership', updateData);
     client.on('Room', updateData);
 
     return () => {
       client.removeListener('sync', onSync);
       client.removeListener('Room.name', updateData);
       client.removeListener('RoomState.members', updateData);
+      client.removeListener('Room.myMembership', updateData);
       client.removeListener('Room', updateData);
     };
   }, []);

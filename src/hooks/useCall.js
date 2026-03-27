@@ -144,9 +144,11 @@ export function useCall() {
       setCallState('calling');
       bindActiveCallListeners(call);
       syncStreamsFromCall(call);
+      return { ok: true, call };
     } catch (e) {
       console.error(e);
       setCallState('idle');
+      return { ok: false, error: e };
     }
   };
 

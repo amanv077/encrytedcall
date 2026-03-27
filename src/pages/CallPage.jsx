@@ -9,9 +9,11 @@ import { Phone, Video, LogOut } from 'lucide-react';
 export default function CallPage({ onLogout }) {
   const [isReady, setIsReady] = useState(matrixManager.isReady);
   const [roomIdInput, setRoomIdInput] = useState('');
+  const [dialerNotice, setDialerNotice] = useState('');
   
   const handleSelectTarget = (id) => {
     setRoomIdInput(id);
+    setDialerNotice('');
   };
 
   const {
@@ -45,12 +47,17 @@ export default function CallPage({ onLogout }) {
     }
   }, [isReady]);
 
-  const handleCall = (video = true) => {
+  const handleCall = async (video = true) => {
     if (!roomIdInput.trim()) {
       alert("Please enter a valid User ID or Room ID");
       return;
     }
-    placeCall(roomIdInput, video);
+    const result = await placeCall(roomIdInput, video);
+    if (!result?.ok) {
+      setDialerNotice(result?.error?.message || "Unable to place call.");
+    } else {
+      setDialerNotice('');
+    }
   };
 
   return (
@@ -89,7 +96,7 @@ export default function CallPage({ onLogout }) {
                  <div className="call-actions">
                    <button 
                      className="btn-call audio" 
-                     onClick={() => handleCall(false)}
+                     onClick={() => { handleCall(false); }}
                      disabled={!isReady}
                    >
                      <Phone size={20} />
@@ -98,13 +105,17 @@ export default function CallPage({ onLogout }) {
                    
                    <button 
                      className="btn-call video" 
-                     onClick={() => handleCall(true)}
+                     onClick={() => { handleCall(true); }}
                      disabled={!isReady}
                    >
                      <Video size={20} />
                      <span>Video Call</span>
                    </button>
                  </div>
+
+                 {dialerNotice && (
+                   <div className="dialer-notice">{dialerNotice}</div>
+                 )}
               </div>
             </div>
           ) : (
