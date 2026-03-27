@@ -6,6 +6,8 @@ class CallService {
   constructor() {
     this.currentCall = null;
     this.listeners = new Set();
+    this.incomingClient = null;
+    this.incomingHandler = null;
   }
 
   // Initialize Matrix event listener for incoming calls
@@ -16,7 +18,13 @@ class CallService {
         return;
     }
 
-    client.on("Call.incoming", (call) => {
+    // Avoid duplicate listeners across remounts/re-logins.
+    if (this.incomingClient && this.incomingHandler) {
+      this.incomingClient.removeListener("Call.incoming", this.incomingHandler);
+    }
+
+    this.incomingClient = client;
+    this.incomingHandler = (call) => {
       console.log("Incoming call:", call);
       // We only handle one call at a time for now
       if (this.currentCall) {
@@ -26,7 +34,9 @@ class CallService {
       this.currentCall = call;
       this._bindCallEvents(call);
       onIncomingCall(call);
-    });
+    };
+
+    client.on("Call.incoming", this.incomingHandler);
   }
 
   async placeCall(targetId, video = true) {
@@ -85,9 +95,6 @@ class CallService {
   }
 
   _bindCallEvents(call) {
-    call.on("state", (state) => {
-      this._notifyListeners({ type: "state", call, state });
-    });
     call.on("hangup", () => {
       if (this.currentCall === call) this.currentCall = null;
       this._notifyListeners({ type: "hangup", call });
@@ -103,6 +110,14 @@ class CallService {
       this._notifyListeners({ type: "state", call, state });
     });
 
+  }
+
+  disposeCallListeners() {
+    if (this.incomingClient && this.incomingHandler) {
+      this.incomingClient.removeListener("Call.incoming", this.incomingHandler);
+    }
+    this.incomingClient = null;
+    this.incomingHandler = null;
   }
 
   subscribe(listener) {

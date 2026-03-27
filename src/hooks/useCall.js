@@ -130,6 +130,7 @@ export function useCall() {
 
     return () => {
       hangupActiveCallForExit();
+      callService.disposeCallListeners();
       clearActiveCallListeners();
       unsubscribe();
       clearInterval(checkReady);
