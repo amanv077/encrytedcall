@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useMatrixData } from '../hooks/useMatrixData';
 import { matrixManager } from '../services/matrixClient';
 import { Users, Hash, Search, User as UserIcon, MessageSquare, Mail, Check, X } from 'lucide-react';
@@ -8,10 +8,43 @@ export default function Sidebar({ onSelectTarget }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('users'); // 'users' | 'rooms' | 'invites'
   const [inviteActionLoading, setInviteActionLoading] = useState({});
+  const previousInviteCountRef = useRef(0);
+  const client = matrixManager.getClient();
+  const myUserId = client?.getUserId();
 
-  const inviteRooms = (rooms || []).filter(
-    (room) => room.getMyMembership && room.getMyMembership() === 'invite',
-  );
+  const getRoomMembership = (room) => {
+    if (!room) return null;
+
+    const membershipFromMethod = room.getMyMembership?.();
+    if (membershipFromMethod) return membershipFromMethod;
+
+    if (myUserId) {
+      const myMember = room.getMember?.(myUserId);
+      if (myMember?.membership) return myMember.membership;
+
+      const stateMembership = room.currentState
+        ?.getStateEvents?.('m.room.member', myUserId)
+        ?.getContent?.()
+        ?.membership;
+      if (stateMembership) return stateMembership;
+    }
+
+    return null;
+  };
+
+  const inviteRooms = (rooms || []).filter((room) => getRoomMembership(room) === 'invite');
+
+  useEffect(() => {
+    const previousCount = previousInviteCountRef.current;
+    const currentCount = inviteRooms.length;
+    const hasNewInvite = currentCount > previousCount;
+
+    if (hasNewInvite && activeTab !== 'invites') {
+      setActiveTab('invites');
+    }
+
+    previousInviteCountRef.current = currentCount;
+  }, [inviteRooms.length, activeTab]);
 
   const filteredUsers = (users || []).filter(user =>
     user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -24,8 +57,20 @@ export default function Sidebar({ onSelectTarget }) {
   );
 
   const getInviteSender = (room) => {
-    const client = matrixManager.getClient();
-    const myUserId = client?.getUserId();
+    const myMember = myUserId ? room.getMember?.(myUserId) : null;
+    const inviterId = myMember?.events?.member?.getSender?.();
+    if (inviterId && inviterId !== myUserId) {
+      const inviterMember = room.getMember?.(inviterId);
+      return inviterMember?.name || inviterMember?.userId || inviterId;
+    }
+
+    const inviteMembers = room.getMembersWithMembership
+      ? room.getMembersWithMembership('invite')
+      : [];
+    const inviteSender = inviteMembers.find((m) => m.userId !== myUserId) || inviteMembers[0];
+    if (inviteSender) {
+      return inviteSender.name || inviteSender.userId || "Unknown sender";
+    }
 
     const joinedMembers = room.getMembersWithMembership
       ? room.getMembersWithMembership('join')
@@ -82,21 +127,24 @@ export default function Sidebar({ onSelectTarget }) {
           onClick={() => setActiveTab('users')}
         >
           <Users size={18} />
-          <span>Users</span>
+          <span className="tab-label">Users</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'rooms' ? 'active' : ''}`}
           onClick={() => setActiveTab('rooms')}
         >
           <Hash size={18} />
-          <span>Rooms</span>
+          <span className="tab-label">Rooms</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'invites' ? 'active' : ''}`}
           onClick={() => setActiveTab('invites')}
         >
           <Mail size={18} />
-          <span>Invites</span>
+          <span className="tab-label">Invites</span>
+          {inviteRooms.length > 0 && (
+            <span className="tab-badge">{inviteRooms.length}</span>
+          )}
         </button>
       </div>
 

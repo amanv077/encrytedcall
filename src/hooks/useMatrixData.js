@@ -60,14 +60,20 @@ export function useMatrixData() {
     client.on('Room.name', updateData);
     client.on('RoomState.members', updateData);
     client.on('Room.myMembership', updateData);
+    client.on('RoomMember.membership', updateData);
+    client.on('Room.timeline', updateData);
     client.on('Room', updateData);
+    const refreshInterval = setInterval(updateData, 2500);
 
     return () => {
       client.removeListener('sync', onSync);
       client.removeListener('Room.name', updateData);
       client.removeListener('RoomState.members', updateData);
       client.removeListener('Room.myMembership', updateData);
+      client.removeListener('RoomMember.membership', updateData);
+      client.removeListener('Room.timeline', updateData);
       client.removeListener('Room', updateData);
+      clearInterval(refreshInterval);
     };
   }, []);
 
