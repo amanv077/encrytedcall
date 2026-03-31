@@ -1,4 +1,6 @@
 import * as sdk from 'matrix-js-sdk';
+import { storageService } from './storageService';
+import { chatService } from './chatService';
 
 class MatrixClientManager {
   constructor() {
@@ -88,7 +90,10 @@ class MatrixClientManager {
 
     // Start syncing
     await this.client.startClient({ initialSyncLimit: 10 });
-    
+
+    // Wire up chat timeline listeners so messages are captured from first sync
+    chatService.initTimelineListeners();
+
     return new Promise((resolve, reject) => {
         // Timeout after 15 seconds so UI doesn't hang forever
         const timeout = setTimeout(() => {
@@ -141,15 +146,22 @@ class MatrixClientManager {
     const client = this.client;
     this.isReady = false;
     localStorage.clear();
-    
+
+    // Tear down chat listeners before stopping the client
+    chatService.disposeListeners();
+
     if (client) {
       try { await client.logout(); } catch(e) {}
       client.stopClient();
       this.client = null;
     }
-    // Clear indexedDB to prevent crypto mismatches next time
+
+    // GDPR: wipe all locally stored messages
+    storageService.clearAll();
+
+    // Clear IndexedDB to prevent crypto mismatches next time
     try {
-        window.indexedDB.deleteDatabase("matrix-js-sdk:crypto");
+      window.indexedDB.deleteDatabase('matrix-js-sdk:crypto');
     } catch(e) {}
   }
 }

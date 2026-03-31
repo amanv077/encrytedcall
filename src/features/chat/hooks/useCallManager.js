@@ -1,7 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
+import { useDispatch } from 'react-redux';
 import { callService } from '../utils/callService';
+import { matrixManager } from '../utils/matrixClient';
+import { setCallMode } from '../../../store/uiSlice';
 
+/**
+ * useCallManager – manages the full audio/video call lifecycle.
+ *
+ * Integrates with uiSlice so that the call display mode (pip / fullscreen /
+ * hidden) is driven from global Redux state, allowing ChatLayout to keep the
+ * chat panel visible alongside an ongoing call.
+ */
 export function useCallManager() {
+  const dispatch = useDispatch();
+
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [callState, setCallState] = useState('idle');
@@ -10,121 +22,118 @@ export function useCallManager() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+
   const activeCallListenersRef = useRef(null);
   const activeCallRef = useRef(null);
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
 
   const clearActiveCallListeners = () => {
     const listeners = activeCallListenersRef.current;
     if (!listeners) return;
-
-    listeners.call.removeListener("feeds_changed", listeners.onFeedsChanged);
-    listeners.call.removeListener("state", listeners.onStateChanged);
+    listeners.call.removeListener('feeds_changed', listeners.onFeedsChanged);
+    listeners.call.removeListener('state', listeners.onStateChanged);
     activeCallListenersRef.current = null;
   };
 
   const hangupActiveCallForExit = () => {
     const call = activeCallRef.current;
     if (!call) return;
-
     try {
-      if (!call.callHasEnded()) {
-        call.hangup("user_hangup", true);
-      }
+      if (!call.callHasEnded()) call.hangup('user_hangup', true);
     } catch (e) {
-      console.warn("Failed to hang up active call during page exit:", e);
+      console.warn('[useCallManager] Exit hangup failed:', e);
     }
   };
 
   const syncStreamsFromCall = (call) => {
     if (!call) return;
 
-    const localPrimaryStream =
-      (call.isScreensharing && call.isScreensharing() && call.localScreensharingStream) ||
+    const localPrimary =
+      (call.isScreensharing?.() && call.localScreensharingStream) ||
       call.localUsermediaStream ||
       call.localScreensharingStream ||
       null;
 
-    const remotePrimaryStream =
+    const remotePrimary =
       call.remoteScreensharingStream ||
       call.remoteUsermediaStream ||
       null;
 
-    setLocalStream(localPrimaryStream);
-    setRemoteStream(remotePrimaryStream);
+    setLocalStream(localPrimary);
+    setRemoteStream(remotePrimary);
     setIsMuted(call.isMicrophoneMuted());
     setIsVideoOff(call.isLocalVideoMuted());
-    setIsScreenSharing(Boolean(call.isScreensharing && call.isScreensharing()));
+    setIsScreenSharing(Boolean(call.isScreensharing?.()));
   };
 
   const bindActiveCallListeners = (call) => {
     clearActiveCallListeners();
     if (!call) return;
 
-    const onFeedsChanged = () => {
-      syncStreamsFromCall(call);
-    };
-
+    const onFeedsChanged = () => syncStreamsFromCall(call);
     const onStateChanged = (state) => {
       if (state === 'connected' || state === 'connecting') {
         syncStreamsFromCall(call);
       }
     };
 
-    call.on("feeds_changed", onFeedsChanged);
-    call.on("state", onStateChanged);
+    call.on('feeds_changed', onFeedsChanged);
+    call.on('state', onStateChanged);
     activeCallListenersRef.current = { call, onFeedsChanged, onStateChanged };
   };
 
+  // Keep ref in sync for page-exit handler
   useEffect(() => {
     activeCallRef.current = activeCall;
   }, [activeCall]);
 
+  // Hang up on page unload
   useEffect(() => {
-    const handlePageExit = () => {
-      hangupActiveCallForExit();
-    };
-
-    window.addEventListener('pagehide', handlePageExit);
-    window.addEventListener('beforeunload', handlePageExit);
-
+    const handler = () => hangupActiveCallForExit();
+    window.addEventListener('pagehide', handler);
+    window.addEventListener('beforeunload', handler);
     return () => {
-      window.removeEventListener('pagehide', handlePageExit);
-      window.removeEventListener('beforeunload', handlePageExit);
+      window.removeEventListener('pagehide', handler);
+      window.removeEventListener('beforeunload', handler);
     };
   }, []);
 
+  // ── Incoming call listener + call service subscription ────────────────────
   useEffect(() => {
-    // Listen for incoming calls
     const handleIncoming = (call) => {
       setIncomingCall(call);
       setCallState('ringing');
+      // Show PiP so the user can see the incoming call alongside the chat
+      dispatch(setCallMode('pip'));
     };
 
-    // Watch for Matrix readiness to attach listeners
+    // Poll until the Matrix client is ready before attaching the listener
     const checkReady = setInterval(() => {
-      import('../utils/matrixClient').then(({ matrixManager }) => {
-        if (matrixManager.isReady) {
-          callService.initCallListeners(handleIncoming);
-          clearInterval(checkReady);
-        }
-      });
+      if (matrixManager.isReady) {
+        callService.initCallListeners(handleIncoming);
+        clearInterval(checkReady);
+      }
     }, 1000);
-
 
     const unsubscribe = callService.subscribe((event) => {
       if (event.type === 'state') {
-         setCallState(event.state);
+        setCallState(event.state);
+        if (event.state === 'connected') {
+          dispatch(setCallMode('pip'));
+        }
       }
       if (event.type === 'hangup' || event.type === 'error') {
-         clearActiveCallListeners();
-         setCallState('idle');
-         setActiveCall(null);
-         setIncomingCall(null);
-         setLocalStream(null);
-         setRemoteStream(null);
-         setIsMuted(false);
-         setIsVideoOff(false);
-         setIsScreenSharing(false);
+        clearActiveCallListeners();
+        setCallState('idle');
+        setActiveCall(null);
+        setIncomingCall(null);
+        setLocalStream(null);
+        setRemoteStream(null);
+        setIsMuted(false);
+        setIsVideoOff(false);
+        setIsScreenSharing(false);
+        dispatch(setCallMode('hidden'));
       }
     });
 
@@ -135,53 +144,53 @@ export function useCallManager() {
       unsubscribe();
       clearInterval(checkReady);
     };
-  }, []);
+  }, [dispatch]);
+
+  // ── Public actions ─────────────────────────────────────────────────────────
 
   const placeCall = async (roomId, isVideo = true) => {
     try {
       const call = await callService.placeCall(roomId, isVideo);
       setActiveCall(call);
       setCallState('calling');
+      dispatch(setCallMode('pip'));
       bindActiveCallListeners(call);
       syncStreamsFromCall(call);
       return { ok: true, call };
     } catch (e) {
-      console.error(e);
+      console.error('[useCallManager] placeCall error:', e);
       setCallState('idle');
+      dispatch(setCallMode('hidden'));
       return { ok: false, error: e };
     }
   };
 
   const answerCall = async () => {
-    if (incomingCall) {
-      try {
-        // Explicitly answer with video only when the incoming invite includes video.
-        await incomingCall.answer(true, incomingCall.hasRemoteUserMediaVideoTrack);
-        setActiveCall(incomingCall);
-        setIncomingCall(null);
-        setCallState('connected');
-        bindActiveCallListeners(incomingCall);
-        syncStreamsFromCall(incomingCall);
-      } catch (e) {
-         console.error(e);
-      }
+    if (!incomingCall) return;
+    try {
+      await incomingCall.answer(true, incomingCall.hasRemoteUserMediaVideoTrack);
+      setActiveCall(incomingCall);
+      setIncomingCall(null);
+      setCallState('connected');
+      dispatch(setCallMode('pip'));
+      bindActiveCallListeners(incomingCall);
+      syncStreamsFromCall(incomingCall);
+    } catch (e) {
+      console.error('[useCallManager] answerCall error:', e);
     }
   };
 
   const rejectCall = () => {
-    if (incomingCall) {
-      incomingCall.reject();
-      setIncomingCall(null);
-      setCallState('idle');
-    }
+    if (!incomingCall) return;
+    incomingCall.reject();
+    setIncomingCall(null);
+    setCallState('idle');
+    dispatch(setCallMode('hidden'));
   };
 
   const endCall = () => {
-    if (activeCall) {
-      activeCall.hangup("user_hangup", false);
-    }
+    if (activeCall) activeCall.hangup('user_hangup', false);
     clearActiveCallListeners();
-    // Force UI reset manually to be safe
     setCallState('idle');
     setActiveCall(null);
     setIncomingCall(null);
@@ -190,46 +199,41 @@ export function useCallManager() {
     setIsMuted(false);
     setIsVideoOff(false);
     setIsScreenSharing(false);
+    dispatch(setCallMode('hidden'));
   };
-
 
   const toggleMute = async () => {
     if (!activeCall) return;
-
     try {
       const muted = await activeCall.setMicrophoneMuted(!activeCall.isMicrophoneMuted());
       setIsMuted(muted);
       syncStreamsFromCall(activeCall);
     } catch (e) {
-      console.error("Failed to toggle microphone:", e);
+      console.error('[useCallManager] toggleMute error:', e);
     }
   };
 
   const toggleVideo = async () => {
     if (!activeCall) return;
-
     try {
-      // setLocalVideoMuted(false) performs the SDK upgrade/renegotiation path.
       const muted = await activeCall.setLocalVideoMuted(!activeCall.isLocalVideoMuted());
       setIsVideoOff(muted);
       syncStreamsFromCall(activeCall);
     } catch (e) {
-      console.error("Failed to toggle video:", e);
+      console.error('[useCallManager] toggleVideo error:', e);
     }
   };
 
   const toggleScreenShare = async () => {
     if (!activeCall) return;
-
     try {
       const enabled = await activeCall.setScreensharingEnabled(!activeCall.isScreensharing());
       setIsScreenSharing(enabled);
       syncStreamsFromCall(activeCall);
     } catch (e) {
-      console.error("Failed to toggle screen sharing:", e);
+      console.error('[useCallManager] toggleScreenShare error:', e);
     }
   };
-
 
   return {
     incomingCall,
@@ -246,6 +250,6 @@ export function useCallManager() {
     endCall,
     toggleMute,
     toggleVideo,
-    toggleScreenShare
+    toggleScreenShare,
   };
 }

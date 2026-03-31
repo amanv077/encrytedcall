@@ -1,0 +1,73 @@
+.wrapper {
+  display: flex;
+  margin: 2px 16px;
+  animation: fadeIn 0.15s ease-in;
+
+  &.outgoing {
+    justify-content: flex-end;
+  }
+
+  &.incoming {
+    justify-content: flex-start;
+  }
+}
+
+.bubble {
+  max-width: 65%;
+  min-width: 80px;
+  padding: 6px 10px 6px 10px;
+  border-radius: 8px;
+  position: relative;
+  word-break: break-word;
+}
+
+.bubbleOut {
+  background: #005c4b;
+  border-radius: 8px 0 8px 8px;
+  color: #e9edef;
+}
+
+.bubbleIn {
+  background: #202c33;
+  border-radius: 0 8px 8px 8px;
+  color: #e9edef;
+}
+
+.senderName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #00a884;
+  margin-bottom: 2px;
+}
+
+.body {
+  font-size: 14.2px;
+  line-height: 19px;
+  color: #e9edef;
+  white-space: pre-wrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.time {
+  font-size: 11px;
+  color: #8696a0;
+  white-space: nowrap;
+}
+
+.lockIcon {
+  font-size: 10px;
+  color: #8696a0;
+  opacity: 0.8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

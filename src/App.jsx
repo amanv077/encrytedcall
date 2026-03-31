@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Provider } from 'react-redux';
 import { ConfigProvider, theme, Spin } from 'antd';
 import LoginPage from './features/auth/pages/LoginPage/LoginPage';
 import ChatLayout from './features/chat/components/ChatLayout/ChatLayout';
 import { matrixManager } from './features/chat/utils/matrixClient';
+import { storageService } from './features/chat/utils/storageService';
+import store from './store/index';
 import './shared/styles/global.scss';
 
 function App() {
@@ -16,6 +19,9 @@ function App() {
 
     const checkAuth = async () => {
       try {
+        // Init persistent storage before resuming session so that
+        // chatService can begin saving events immediately on sync.
+        await storageService.init();
         const client = await matrixManager.resumeSession();
         if (client) {
           setIsLoggedIn(true);
@@ -30,6 +36,7 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
+    // storageService.clearAll() is called inside matrixManager.logout()
     await matrixManager.logout();
     setIsLoggedIn(false);
   };
@@ -50,6 +57,7 @@ function App() {
   };
 
   return (
+    <Provider store={store}>
     <ConfigProvider theme={antdThemeConfig}>
       <div style={{ height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         {loading ? (
@@ -61,6 +69,7 @@ function App() {
         )}
       </div>
     </ConfigProvider>
+    </Provider>
   );
 }
 

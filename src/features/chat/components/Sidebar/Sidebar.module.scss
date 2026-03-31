@@ -71,4 +71,9 @@
   &.active {
     background: #2a3942;
   }
+
+  // Invited rooms get a subtle left-border highlight
+  &.inviteItem {
+    border-left: 3px solid #ea005e;
+  }
 }

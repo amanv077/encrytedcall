@@ -1,0 +1,147 @@
+// ── Inline timeline pill / card ───────────────────────────────────────────────
+
+.wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #182229;
+  border: 1px solid #2a3942;
+  border-radius: 20px;
+  padding: 4px 14px;
+}
+
+.label {
+  font-size: 12.5px;
+  color: #8696a0;
+}
+
+.card {
+  background: #202c33;
+  border: 1px solid #2a3942;
+  border-radius: 10px;
+  padding: 14px 18px;
+  max-width: 340px;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e9edef;
+}
+
+.body {
+  font-size: 13px;
+  color: #8696a0;
+  margin-bottom: 12px;
+
+  strong {
+    color: #e9edef;
+  }
+}
+
+// ── Full-screen invite gate ───────────────────────────────────────────────────
+
+.gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  background: #0b141a;
+  padding: 32px;
+}
+
+.gateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: #202c33;
+  border: 1px solid #2a3942;
+  border-radius: 16px;
+  padding: 40px 48px;
+  max-width: 420px;
+  width: 100%;
+  gap: 0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.gateIcon {
+  font-size: 48px;
+  color: #00a884;
+  margin-bottom: 20px;
+}
+
+.gateTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #e9edef;
+  margin: 0 0 6px;
+}
+
+.gateRoomName {
+  font-size: 15px;
+  color: #00a884;
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+
+.gateBody {
+  font-size: 14px;
+  color: #8696a0;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.gateEncNote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #66767e;
+  background: #182229;
+  border-radius: 20px;
+  padding: 4px 14px;
+  margin-bottom: 28px;
+}
+
+.gateBtns {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.gateBtnDecline {
+  flex: 1;
+  height: 44px !important;
+  font-size: 15px !important;
+  border-radius: 8px !important;
+}
+
+.gateBtnAccept {
+  flex: 1;
+  height: 44px !important;
+  font-size: 15px !important;
+  border-radius: 8px !important;
+  background: #00a884 !important;
+  border-color: #00a884 !important;
+
+  &:hover:not(:disabled) {
+    background: #06cf9c !important;
+    border-color: #06cf9c !important;
+  }
+}
