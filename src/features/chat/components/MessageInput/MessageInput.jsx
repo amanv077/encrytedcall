@@ -1,26 +1,34 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Button, Tooltip } from 'antd';
-import { SendOutlined, LockOutlined } from '@ant-design/icons';
+import { Tooltip } from 'antd';
+import {
+  SendOutlined,
+  PaperClipOutlined,
+  AudioOutlined,
+  FileTextOutlined,
+  SolutionOutlined,
+  CalendarOutlined,
+  AppstoreOutlined,
+  LockOutlined,
+} from '@ant-design/icons';
 import styles from './MessageInput.module.scss';
 
-/**
- * MessageInput – compose and send a chat message.
- *
- * - Enter sends; Shift+Enter inserts a newline.
- * - Disabled when no room is selected or the Matrix client is not ready.
- *
- * @param {{ onSend: (text: string) => void, disabled: boolean, isEncrypted: boolean }} props
- */
+const ACTION_CHIPS = [
+  { icon: <FileTextOutlined />,  label: 'Case' },
+  { icon: <SolutionOutlined />,  label: 'Job' },
+  { icon: <CalendarOutlined />,  label: 'Event' },
+  { icon: <AudioOutlined />,     label: 'Voice note' },
+  { icon: <AppstoreOutlined />,  label: 'Interactive' },
+];
+
 export default function MessageInput({ onSend, disabled = false, isEncrypted = false }) {
   const [text, setText] = useState('');
-  const textareaRef = useRef(null);
+  const textareaRef     = useRef(null);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setText('');
-    // Re-focus so the user can keep typing
     textareaRef.current?.focus();
   }, [text, disabled, onSend]);
 
@@ -35,32 +43,70 @@ export default function MessageInput({ onSend, disabled = false, isEncrypted = f
   );
 
   return (
-    <div className={styles.inputRow}>
-      <div className={styles.inputWrapper}>
-        {isEncrypted && (
-          <Tooltip title="End-to-end encrypted">
-            <LockOutlined className={styles.lockIcon} />
+    <div className={styles.inputArea}>
+
+      {/* ── Action chips ──────────────────────────────────────────────── */}
+      <div className={styles.chipsRow}>
+        {ACTION_CHIPS.map(({ icon, label }) => (
+          <Tooltip key={label} title={label}>
+            <button className={styles.chip} disabled={disabled}>
+              {icon}
+              <span className={styles.chipLabel}>{label}</span>
+            </button>
           </Tooltip>
-        )}
-        <textarea
-          ref={textareaRef}
-          className={styles.textarea}
-          placeholder={disabled ? 'Select a conversation…' : 'Type a message'}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          rows={1}
-        />
+        ))}
       </div>
-      <Button
-        type="primary"
-        shape="circle"
-        icon={<SendOutlined />}
-        onClick={handleSend}
-        disabled={disabled || !text.trim()}
-        className={styles.sendBtn}
-      />
+
+      {/* ── Compose pill: paperclip | textarea | mic/send ─────────────── */}
+      <div className={styles.composerRow}>
+        {/* The whole pill */}
+        <div className={`${styles.composerPill} ${disabled ? styles.composerPillDisabled : ''}`}>
+
+          {/* Left icon – attachment */}
+          <Tooltip title="Attach file">
+            <button className={styles.pillBtn} disabled={disabled} tabIndex={-1}>
+              <PaperClipOutlined />
+            </button>
+          </Tooltip>
+
+          {/* Encryption indicator (only when E2E) */}
+          {isEncrypted && (
+            <Tooltip title="End-to-end encrypted">
+              <LockOutlined className={styles.lockIcon} />
+            </Tooltip>
+          )}
+
+          {/* Text area */}
+          <textarea
+            ref={textareaRef}
+            className={styles.textarea}
+            placeholder={disabled ? 'Select a conversation…' : 'Type a message'}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            rows={1}
+          />
+
+          {/* Right icon – send when text present, mic otherwise */}
+          {text.trim() ? (
+            <button
+              className={`${styles.pillBtn} ${styles.pillBtnSend}`}
+              onClick={handleSend}
+              disabled={disabled}
+            >
+              <SendOutlined />
+            </button>
+          ) : (
+            <Tooltip title="Voice message">
+              <button className={styles.pillBtn} disabled={disabled} tabIndex={-1}>
+                <AudioOutlined />
+              </button>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

@@ -1,16 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Typography, Button, Space, Avatar, Tooltip } from 'antd';
+import { Typography, Button, Space, Avatar, Tooltip, Input } from 'antd';
 import {
   PhoneOutlined,
   VideoCameraOutlined,
   SearchOutlined,
-  LockOutlined,
   UserOutlined,
   TeamOutlined,
+  HomeOutlined,
+  MessageOutlined,
+  TagOutlined,
+  FileTextOutlined,
+  CloudOutlined,
+  ToolOutlined,
+  SettingOutlined,
+  BellOutlined,
+  GlobalOutlined,
+  EllipsisOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { setActiveRoom, selectActiveRoomId } from '../../../../store/chatSlice';
 import { selectCallMode, selectUserSearchOpen } from '../../../../store/uiSlice';
+import { openUserSearch } from '../../../../store/uiSlice';
 import { matrixManager } from '../../utils/matrixClient';
 import { roomService } from '../../utils/roomService';
 import { useCallManager } from '../../hooks/useCallManager';
@@ -20,11 +31,12 @@ import ActiveCall from '../ActiveCall/ActiveCall';
 import Sidebar from '../Sidebar/Sidebar';
 import ChatPanel from '../ChatPanel/ChatPanel';
 import UserSearch from '../UserSearch/UserSearch';
+import ContactPanel from '../ContactPanel/ContactPanel';
 import styles from './ChatLayout.module.scss';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
-// ─── Room header helpers (mirrors Sidebar's logic) ────────────────────────────
+// ── Room header helpers ───────────────────────────────────────────────────────
 
 function getRoomHeaderInfo(client, roomId) {
   if (!client || !roomId) return null;
@@ -33,7 +45,6 @@ function getRoomHeaderInfo(client, roomId) {
 
   const myUserId = client.getUserId();
 
-  // Detect DM
   let isDM = false;
   const mDirect = client.getAccountData?.('m.direct');
   if (mDirect?.getContent) {
@@ -47,7 +58,6 @@ function getRoomHeaderInfo(client, roomId) {
   }
 
   if (isDM) {
-    // Find the other person
     const inviter = room.getDMInviter?.();
     const otherId = inviter || room.getJoinedMembers().find(m => m.userId !== myUserId)?.userId;
     const otherMember = otherId ? room.getMember(otherId) : null;
@@ -59,7 +69,6 @@ function getRoomHeaderInfo(client, roomId) {
     };
   }
 
-  // Group room
   const memberCount = room.getJoinedMemberCount?.() ?? room.getJoinedMembers().length;
   return {
     isDM: false,
@@ -69,44 +78,43 @@ function getRoomHeaderInfo(client, roomId) {
   };
 }
 
-// ─── ChatLayout ───────────────────────────────────────────────────────────────
+// ── Nav rail item ─────────────────────────────────────────────────────────────
+
+function NavItem({ icon, label, active, onClick }) {
+  return (
+    <Tooltip title={label} placement="right">
+      <div className={`${styles.navItem} ${active ? styles.navItemActive : ''}`} onClick={onClick}>
+        <span className={styles.navIcon}>{icon}</span>
+      </div>
+    </Tooltip>
+  );
+}
+
+// ── ChatLayout ────────────────────────────────────────────────────────────────
 
 export default function ChatLayout({ onLogout }) {
   const dispatch = useDispatch();
-  const activeRoomId = useSelector(selectActiveRoomId);
-  const callMode = useSelector(selectCallMode);
+  const activeRoomId   = useSelector(selectActiveRoomId);
+  const callMode       = useSelector(selectCallMode);
   const userSearchOpen = useSelector(selectUserSearchOpen);
 
-  const [isReady, setIsReady] = useState(matrixManager.isReady);
-  const [dialerNotice, setDialerNotice] = useState('');
+  const [isReady, setIsReady]             = useState(matrixManager.isReady);
+  const [dialerNotice, setDialerNotice]   = useState('');
   const [msgSearchOpen, setMsgSearchOpen] = useState(false);
+  const [contactOpen, setContactOpen]     = useState(false);
 
   const {
-    incomingCall,
-    activeCall,
-    callState,
-    localStream,
-    remoteStream,
-    isMuted,
-    isVideoOff,
-    isScreenSharing,
-    placeCall,
-    answerCall,
-    rejectCall,
-    endCall,
-    toggleMute,
-    toggleVideo,
-    toggleScreenShare,
+    incomingCall, activeCall, callState,
+    localStream, remoteStream,
+    isMuted, isVideoOff, isScreenSharing,
+    placeCall, answerCall, rejectCall, endCall,
+    toggleMute, toggleVideo, toggleScreenShare,
   } = useCallManager();
 
-  // Poll until the Matrix client is ready
   useEffect(() => {
     if (isReady) return;
     const interval = setInterval(() => {
-      if (matrixManager.isReady) {
-        setIsReady(true);
-        clearInterval(interval);
-      }
+      if (matrixManager.isReady) { setIsReady(true); clearInterval(interval); }
     }, 500);
     return () => clearInterval(interval);
   }, [isReady]);
@@ -115,100 +123,152 @@ export default function ChatLayout({ onLogout }) {
     dispatch(setActiveRoom(roomId));
     setDialerNotice('');
     setMsgSearchOpen(false);
+    setContactOpen(false);
   };
 
   const handleCall = async (isVideo = true) => {
     if (!activeRoomId) return;
     const result = await placeCall(activeRoomId, isVideo);
-    if (!result?.ok) {
-      setDialerNotice(result?.error?.message || 'Unable to place call.');
-    } else {
-      setDialerNotice('');
-    }
+    if (!result?.ok) setDialerNotice(result?.error?.message || 'Unable to place call.');
+    else setDialerNotice('');
   };
 
   const handlePlaceCallFromTimeline = async (roomId, isVideo) => {
     const result = await placeCall(roomId, isVideo);
-    if (!result?.ok) {
-      setDialerNotice(result?.error?.message || 'Unable to place call.');
-    }
+    if (!result?.ok) setDialerNotice(result?.error?.message || 'Unable to place call.');
   };
 
-  // Room metadata for the header (re-derived when activeRoomId changes)
-  const client = matrixManager.getClient();
+  const client     = matrixManager.getClient();
+  const myUserId   = client?.getUserId();
   const headerInfo = useMemo(
     () => getRoomHeaderInfo(client, activeRoomId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeRoomId],
   );
 
-  const isEncrypted = activeRoomId ? roomService.isRoomEncrypted(activeRoomId) : false;
+  const isEncrypted    = activeRoomId ? roomService.isRoomEncrypted(activeRoomId) : false;
   const roomMembership = useRoomMembership(activeRoomId);
   const isInvitePending = roomMembership === 'invite';
 
   return (
-    <div className={styles.mainLayout}>
-      {/* ── Sidebar ───────────────────────────────────────────────────────── */}
-      <Sidebar
-        onSelectTarget={handleSelectRoom}
-        onLogout={onLogout}
-        selectedTarget={activeRoomId}
-      />
+    <div className={styles.appShell}>
 
-      {/* ── Main content area ─────────────────────────────────────────────── */}
-      <div className={styles.contentArea}>
+      {/* ── Left nav rail ──────────────────────────────────────────────────── */}
+      <nav className={styles.navRail}>
+        <div className={styles.navLogo}>
+          <div className={styles.logoCircle}>
+            <MessageOutlined style={{ fontSize: 18, color: '#fff' }} />
+          </div>
+          <span className={styles.logoText}>SynApp</span>
+        </div>
 
-        {/* Full-screen active call */}
-        {callMode === 'fullscreen' ? (
-          <ActiveCall
-            mode="fullscreen"
-            localStream={localStream}
-            remoteStream={remoteStream}
-            isMuted={isMuted}
-            isVideoOff={isVideoOff}
-            isScreenSharing={isScreenSharing}
-            callState={callState}
-            toggleMute={toggleMute}
-            toggleVideo={toggleVideo}
-            toggleScreenShare={toggleScreenShare}
-            endCall={endCall}
+        <div className={styles.navItems}>
+          <NavItem icon={<HomeOutlined />}     label="Home" />
+          <NavItem icon={<MessageOutlined />}  label="Clinical Messaging" active />
+          <NavItem icon={<TagOutlined />}      label="Expertise" />
+          <NavItem icon={<FileTextOutlined />} label="Notes" />
+          <NavItem icon={<CloudOutlined />}    label="Cloud" />
+          <NavItem icon={<ToolOutlined />}     label="Clinical Tools" />
+        </div>
+
+        <div className={styles.navBottom}>
+          <NavItem icon={<SettingOutlined />} label="Settings" />
+          <Avatar
+            src={client?.getUser(myUserId)?.avatarUrl || undefined}
+            icon={<UserOutlined />}
+            size={36}
+            className={styles.navAvatar}
           />
-        ) : (
-          <>
-            {activeRoomId ? (
-              <div className={styles.chatColumn}>
+        </div>
+      </nav>
 
-                {/* ── Chat header ─────────────────────────────────────────── */}
+      {/* ── Main content ───────────────────────────────────────────────────── */}
+      <div className={styles.mainContent}>
+
+        {/* Top bar */}
+        <div className={styles.topBar}>
+          <Input
+            prefix={<SearchOutlined style={{ color: '#9ba8b5' }} />}
+            placeholder="Search patients, requests, messages, tools…  ⌘ K"
+            className={styles.globalSearch}
+            bordered={false}
+          />
+          <div className={styles.topBarRight}>
+            <span className={styles.langToggle}>
+              <GlobalOutlined style={{ marginRight: 4 }} /> English
+              <span className={styles.langDivider}>|</span> Fr
+            </span>
+            <Tooltip title="Notifications">
+              <Button type="text" icon={<BellOutlined />} className={styles.topBarBtn} />
+            </Tooltip>
+            <Tooltip title={contactOpen ? 'Hide my profile' : 'My profile'}>
+              <Avatar
+                src={client?.getUser(myUserId)?.avatarUrl || undefined}
+                icon={<UserOutlined />}
+                size={32}
+                onClick={() => setContactOpen((v) => !v)}
+                className={`${styles.topBarAvatar} ${contactOpen ? styles.topBarAvatarActive : ''}`}
+              />
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* Body row: sidebar + chat + contact panel */}
+        <div className={styles.bodyRow}>
+
+          {/* Conversations sidebar */}
+          <div className={styles.sidebarCol}>
+            <div className={styles.sidebarTop}>
+              <span className={styles.sidebarTitle}>Chat</span>
+              <Tooltip title="New conversation">
+                <Button
+                  type="text"
+                  icon={<FormOutlined />}
+                  className={styles.newChatBtn}
+                  onClick={() => dispatch(openUserSearch())}
+                />
+              </Tooltip>
+            </div>
+            <Sidebar
+              onSelectTarget={handleSelectRoom}
+              onLogout={onLogout}
+              selectedTarget={activeRoomId}
+            />
+          </div>
+
+          {/* Chat area */}
+          <div className={styles.chatCol}>
+            {callMode === 'fullscreen' ? (
+              <ActiveCall
+                mode="fullscreen"
+                localStream={localStream}
+                remoteStream={remoteStream}
+                isMuted={isMuted} isVideoOff={isVideoOff}
+                isScreenSharing={isScreenSharing} callState={callState}
+                toggleMute={toggleMute} toggleVideo={toggleVideo}
+                toggleScreenShare={toggleScreenShare} endCall={endCall}
+              />
+            ) : activeRoomId ? (
+              <>
+                {/* Chat header */}
                 <div className={styles.chatHeader}>
                   <div className={styles.headerLeft}>
-                    {/* Avatar: contact photo for DM, team icon for group */}
                     {headerInfo?.isDM ? (
                       <Avatar
                         src={headerInfo.avatarUrl}
                         icon={!headerInfo.avatarUrl && <UserOutlined />}
-                        style={{ background: '#00a884', flexShrink: 0 }}
                         size={38}
+                        style={{ flexShrink: 0 }}
                       />
                     ) : (
-                      <Avatar
-                        style={{ background: '#00a884', flexShrink: 0 }}
-                        icon={<TeamOutlined />}
-                        size={38}
-                      />
+                      <Avatar icon={<TeamOutlined />} size={38}
+                        style={{ background: '#006d6a', flexShrink: 0 }} />
                     )}
-
-                    <div className={styles.headerInfo}>
-                      <div className={styles.roomName}>
-                        {headerInfo?.name || activeRoomId}
-                      </div>
-                      <div className={styles.roomSub}>
+                    <div>
+                      <div className={styles.headerName}>{headerInfo?.name || activeRoomId}</div>
+                      <div className={styles.headerSub}>
                         {isInvitePending ? (
-                          <span style={{ color: '#ea005e' }}>Pending invitation</span>
-                        ) : isEncrypted ? (
-                          <>
-                            <LockOutlined style={{ fontSize: 11, marginRight: 4 }} />
-                            end-to-end encrypted
-                          </>
+                          <span style={{ color: '#e53e3e' }}>Pending invitation</span>
                         ) : (
                           <span>{headerInfo?.subtitle}</span>
                         )}
@@ -216,43 +276,34 @@ export default function ChatLayout({ onLogout }) {
                     </div>
                   </div>
 
-                  {/* Call buttons — hidden while invite is pending */}
                   {!isInvitePending && (
                     <Space className={styles.headerActions}>
                       {dialerNotice && (
                         <span className={styles.dialerNotice}>{dialerNotice}</span>
                       )}
                       <Tooltip title="Voice call">
-                        <Button
-                          type="text"
-                          icon={<PhoneOutlined />}
+                        <Button type="text" icon={<PhoneOutlined />}
                           onClick={() => handleCall(false)}
                           disabled={!isReady || callState !== 'idle'}
-                          className={styles.callBtn}
-                        />
+                          className={styles.headerBtn} />
                       </Tooltip>
                       <Tooltip title="Video call">
-                        <Button
-                          type="text"
-                          icon={<VideoCameraOutlined />}
+                        <Button type="text" icon={<VideoCameraOutlined />}
                           onClick={() => handleCall(true)}
                           disabled={!isReady || callState !== 'idle'}
-                          className={styles.callBtn}
-                        />
+                          className={styles.headerBtn} />
                       </Tooltip>
                       <Tooltip title="Search messages">
-                        <Button
-                          type="text"
-                          icon={<SearchOutlined />}
-                          className={`${styles.callBtn} ${msgSearchOpen ? styles.callBtnActive : ''}`}
-                          onClick={() => setMsgSearchOpen((v) => !v)}
-                        />
+                        <Button type="text" icon={<SearchOutlined />}
+                          className={`${styles.headerBtn} ${msgSearchOpen ? styles.headerBtnActive : ''}`}
+                          onClick={() => setMsgSearchOpen((v) => !v)} />
                       </Tooltip>
+                      <Button type="text" icon={<EllipsisOutlined />} className={styles.headerBtn} />
                     </Space>
                   )}
                 </div>
 
-                {/* ── Chat panel + optional PiP ────────────────────────── */}
+                {/* Chat panel + PiP */}
                 <div className={styles.chatPanelWrapper}>
                   <ChatPanel
                     isReady={isReady}
@@ -260,52 +311,41 @@ export default function ChatLayout({ onLogout }) {
                     msgSearchOpen={msgSearchOpen}
                     onCloseSearch={() => setMsgSearchOpen(false)}
                   />
-
                   {callMode === 'pip' && (activeCall || incomingCall) && (
                     <ActiveCall
                       mode="pip"
-                      localStream={localStream}
-                      remoteStream={remoteStream}
-                      isMuted={isMuted}
-                      isVideoOff={isVideoOff}
-                      isScreenSharing={isScreenSharing}
-                      callState={callState}
-                      toggleMute={toggleMute}
-                      toggleVideo={toggleVideo}
-                      toggleScreenShare={toggleScreenShare}
-                      endCall={endCall}
+                      localStream={localStream} remoteStream={remoteStream}
+                      isMuted={isMuted} isVideoOff={isVideoOff}
+                      isScreenSharing={isScreenSharing} callState={callState}
+                      toggleMute={toggleMute} toggleVideo={toggleVideo}
+                      toggleScreenShare={toggleScreenShare} endCall={endCall}
                     />
                   )}
                 </div>
-              </div>
+              </>
             ) : (
-              /* Welcome state */
               <div className={styles.welcomePlaceholder}>
-                <UserOutlined
-                  style={{ fontSize: 72, color: '#8696a0', opacity: 0.3, marginBottom: 20 }}
-                />
-                <Title level={3} style={{ color: '#e9edef', fontWeight: 300, margin: 0 }}>
-                  Secure Encrypted Chat
-                </Title>
-                <Text style={{ color: '#8696a0', textAlign: 'center', marginTop: 10 }}>
+                <div className={styles.welcomeIcon}>
+                  <MessageOutlined style={{ fontSize: 40, color: '#006d6a' }} />
+                </div>
+                <Text className={styles.welcomeTitle}>Secure Encrypted Chat</Text>
+                <Text className={styles.welcomeSub}>
                   Select a conversation or tap the pencil icon to start a new chat.
-                  <br />
-                  All messages and calls are end-to-end encrypted.
+                  <br />All messages and calls are end-to-end encrypted.
                 </Text>
               </div>
             )}
-          </>
-        )}
+          </div>
+
+          {/* My profile panel – always in DOM, slides in/out via CSS */}
+          <ContactPanel
+            open={contactOpen}
+            onClose={() => setContactOpen(false)}
+          />
+        </div>
       </div>
 
-      {/* Always-rendered: incoming call modal */}
-      <CallOverlay
-        call={incomingCall}
-        onAccept={answerCall}
-        onReject={rejectCall}
-      />
-
-      {/* User search modal */}
+      <CallOverlay call={incomingCall} onAccept={answerCall} onReject={rejectCall} />
       <UserSearch open={userSearchOpen} />
     </div>
   );

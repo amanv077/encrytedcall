@@ -1,29 +1,131 @@
-.inputRow {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #202c33;
-  border-top: 1px solid #2a3942;
+@import '../../../../shared/styles/variables';
+
+// ── Outer container ───────────────────────────────────────────────────────────
+
+.inputArea {
+  background: #ffffff;          // explicit white — never inherit chat-panel gray
+  border-top: 1px solid $border;
   flex-shrink: 0;
 }
 
-.inputWrapper {
-  flex: 1;
+// ── Action chips row ──────────────────────────────────────────────────────────
+
+.chipsRow {
   display: flex;
   align-items: center;
-  background: #2a3942;
-  border-radius: 8px;
-  padding: 0 12px;
-  min-height: 42px;
-  gap: 8px;
+  gap: 6px;
+  padding: 8px 16px 8px;
+  background: #ffffff;          // explicit — prevents $bg-chat bleed-through
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
 
-.lockIcon {
-  color: #8696a0;
-  font-size: 13px;
-  flex-shrink: 0;
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  background: #ffffff;          // solid white chip face
+  border: 1px solid $border;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: $text-secondary;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+
+  &:hover:not(:disabled) {
+    border-color: $primary;
+    color: $primary;
+    background: $primary-light;
+  }
+
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
 }
+
+.chipLabel { font-size: 12.5px; }
+
+// ── Composer row wrapper ──────────────────────────────────────────────────────
+
+.composerRow {
+  padding: 4px 14px 10px;
+  background: #ffffff;
+}
+
+// ── The pill itself: rounded border, holds all three elements ─────────────────
+
+.composerPill {
+  display: flex;
+  align-items: center;
+  border: 1px solid $border;
+  border-radius: 24px;
+  background: $bg-white;
+  padding: 0 4px;
+  min-height: 44px;
+  gap: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:focus-within {
+    border-color: $primary;
+    box-shadow: 0 0 0 3px rgba(0, 109, 106, 0.08);
+  }
+}
+
+.composerPillDisabled {
+  background: $bg-app;
+  opacity: 0.7;
+}
+
+// ── Icon buttons inside the pill ──────────────────────────────────────────────
+
+.pillBtn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: $text-muted;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+
+  &:hover:not(:disabled) {
+    background: $bg-app;
+    color: $primary;
+  }
+
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.pillBtnSend {
+  background: $primary !important;
+  color: #fff !important;
+
+  &:hover:not(:disabled) {
+    background: $primary-hover !important;
+    transform: scale(1.05);
+  }
+}
+
+// ── Lock icon ─────────────────────────────────────────────────────────────────
+
+.lockIcon {
+  color: $text-muted;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+// ── Textarea ──────────────────────────────────────────────────────────────────
 
 .textarea {
   flex: 1;
@@ -31,41 +133,17 @@
   border: none;
   outline: none;
   resize: none;
-  color: #e9edef;
-  font-size: 14.5px;
-  line-height: 20px;
-  padding: 10px 0;
+  color: $text-primary;
+  font-size: 14px;
+  line-height: 22px;
+  padding: 10px 6px;
   font-family: inherit;
   max-height: 120px;
   overflow-y: auto;
-
-  &::placeholder {
-    color: #8696a0;
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
-  // Auto-grow: handled by the rows attribute + max-height overflow
   scrollbar-width: thin;
-  scrollbar-color: #3b4a54 transparent;
-}
+  scrollbar-color: $border transparent;
+  min-width: 0;
 
-.sendBtn {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  background: #00a884 !important;
-  border-color: #00a884 !important;
-
-  &:hover:not(:disabled) {
-    background: #06cf9c !important;
-    border-color: #06cf9c !important;
-  }
-
-  &:disabled {
-    opacity: 0.4;
-  }
+  &::placeholder { color: $text-muted; }
+  &:disabled { cursor: not-allowed; }
 }

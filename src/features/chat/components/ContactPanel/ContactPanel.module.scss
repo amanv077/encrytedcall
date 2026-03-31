@@ -1,0 +1,249 @@
+@import '../../../../shared/styles/variables';
+
+// ── Panel: collapsed by default, slides in when .panelOpen ───────────────────
+
+.panel {
+  width: 0;
+  min-width: 0;
+  background: $bg-white;
+  border-left: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;            // clips the close button + content when collapsed
+  position: relative;         // makes overflow:hidden clip absolutely-positioned children
+  flex-shrink: 0;
+  transition: width 0.25s ease, min-width 0.25s ease, border-color 0.25s ease;
+  scrollbar-width: thin;
+  scrollbar-color: $border transparent;
+}
+
+.panelOpen {
+  width: 260px;
+  min-width: 260px;
+  border-left: 1px solid $border;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;   // anchors the close button
+}
+
+// ── Close button ──────────────────────────────────────────────────────────────
+
+.closeBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: $bg-app;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  z-index: 1;
+
+  &:hover { background: $border; color: $text-primary; }
+}
+
+// ── Empty / placeholder state ─────────────────────────────────────────────
+
+.emptyPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  gap: 12px;
+  text-align: center;
+}
+
+.emptyText {
+  font-size: 13px;
+  color: $text-muted;
+  line-height: 1.5;
+}
+
+// ── Profile top ────────────────────────────────────────────────────────────
+
+.profileTop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 20px 16px;
+  border-bottom: 1px solid $border-light;
+}
+
+.avatarWrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.avatar {
+  border: 3px solid $primary-light;
+  display: block;
+}
+
+.onlineDot {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 13px;
+  height: 13px;
+  background: $success;
+  border-radius: 50%;
+  border: 2px solid $bg-white;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.name {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.verified {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+// ── Info rows ──────────────────────────────────────────────────────────────
+
+.infoBlock {
+  padding: 14px 20px;
+  border-bottom: 1px solid $border-light;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.infoRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.infoLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: $text-muted;
+}
+
+.infoValue {
+  font-size: 13px;
+  color: $text-primary;
+  word-break: break-all;
+}
+
+.infoValueRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+// ── Expertise ──────────────────────────────────────────────────────────────
+
+.expertiseBlock {
+  padding: 16px 20px;
+  border-bottom: 1px solid $border-light;
+}
+
+.blockTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  background: $primary-light !important;
+  color: $primary !important;
+  border-color: $primary-medium !important;
+  border-radius: 20px !important;
+  font-size: 12px;
+}
+
+// ── Member list (group rooms) ──────────────────────────────────────────────
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.memberName {
+  font-size: 13px;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moreMembers {
+  font-size: 12px;
+  color: $text-muted;
+  padding-left: 2px;
+}
+
+// ── Expandable sections ────────────────────────────────────────────────────
+
+.sections {
+  display: flex;
+  flex-direction: column;
+}
+
+.sectionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid $border-light;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: $bg-hover; }
+}
+
+.sectionLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+.sectionArrow {
+  font-size: 12px;
+  color: $text-muted;
+}

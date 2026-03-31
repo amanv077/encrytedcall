@@ -1,4 +1,4 @@
-// ── Inline timeline pill / card ───────────────────────────────────────────────
+@import '../../../../shared/styles/variables';
 
 .wrapper {
   display: flex;
@@ -10,24 +10,25 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #182229;
-  border: 1px solid #2a3942;
+  background: $bg-white;
+  border: 1px solid $border;
   border-radius: 20px;
   padding: 4px 14px;
 }
 
 .label {
   font-size: 12.5px;
-  color: #8696a0;
+  color: $text-secondary;
 }
 
 .card {
-  background: #202c33;
-  border: 1px solid #2a3942;
-  border-radius: 10px;
+  background: $bg-white;
+  border: 1px solid $border;
+  border-radius: 12px;
   padding: 14px 18px;
   max-width: 340px;
   width: 100%;
+  box-shadow: $shadow-sm;
 }
 
 .header {
@@ -40,20 +41,19 @@
 .title {
   font-size: 14px;
   font-weight: 600;
-  color: #e9edef;
+  color: $text-primary;
 }
 
 .body {
   font-size: 13px;
-  color: #8696a0;
+  color: $text-secondary;
   margin-bottom: 12px;
+  line-height: 1.5;
 
-  strong {
-    color: #e9edef;
-  }
+  strong { color: $text-primary; }
 }
 
-// ── Full-screen invite gate ───────────────────────────────────────────────────
+// ── Invite gate ────────────────────────────────────────────────────────────────
 
 .gate {
   display: flex;
@@ -61,7 +61,7 @@
   justify-content: center;
   height: 100%;
   width: 100%;
-  background: #0b141a;
+  background: $bg-chat;
   padding: 32px;
 }
 
@@ -70,39 +70,39 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  background: #202c33;
-  border: 1px solid #2a3942;
+  background: $bg-white;
+  border: 1px solid $border;
   border-radius: 16px;
   padding: 40px 48px;
   max-width: 420px;
   width: 100%;
   gap: 0;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: $shadow-md;
 }
 
 .gateIcon {
   font-size: 48px;
-  color: #00a884;
+  color: $primary;
   margin-bottom: 20px;
 }
 
 .gateTitle {
   font-size: 20px;
   font-weight: 600;
-  color: #e9edef;
+  color: $text-primary;
   margin: 0 0 6px;
 }
 
 .gateRoomName {
   font-size: 15px;
-  color: #00a884;
+  color: $primary;
   font-weight: 500;
   margin: 0 0 14px;
 }
 
 .gateBody {
   font-size: 14px;
-  color: #8696a0;
+  color: $text-secondary;
   line-height: 1.6;
   margin: 0 0 16px;
 }
@@ -112,8 +112,9 @@
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #66767e;
-  background: #182229;
+  color: $text-muted;
+  background: $bg-app;
+  border: 1px solid $border;
   border-radius: 20px;
   padding: 4px 14px;
   margin-bottom: 28px;
@@ -137,11 +138,11 @@
   height: 44px !important;
   font-size: 15px !important;
   border-radius: 8px !important;
-  background: #00a884 !important;
-  border-color: #00a884 !important;
+  background: $primary !important;
+  border-color: $primary !important;
 
   &:hover:not(:disabled) {
-    background: #06cf9c !important;
-    border-color: #06cf9c !important;
+    background: $primary-hover !important;
+    border-color: $primary-hover !important;
   }
 }

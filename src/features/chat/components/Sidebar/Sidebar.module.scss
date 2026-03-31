@@ -1,56 +1,76 @@
+@import '../../../../shared/styles/variables';
+
 .sidebar {
-  min-width: 350px;
-  max-width: 400px;
-  width: 30%;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #111b21;
+  background: $bg-white;
+  overflow: hidden;
 }
 
-.header {
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background-color: #202c33;
-  height: 60px;
-}
-
-.headerIcons {
-  display: flex;
-  gap: 20px;
-  color: #aebac1;
-  font-size: 20px;
-}
-
-.icon {
-  cursor: pointer;
-}
-
-.statusIcon {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px dashed #aebac1;
-  cursor: pointer;
-}
+// ── Search ─────────────────────────────────────────────────────────────────
 
 .searchWrapper {
-  padding: 8px 12px;
-  border-bottom: 1px solid #202c33;
+  padding: 10px 12px 8px;
 }
 
 .searchInput {
-  background: #202c33;
-  border: none;
-  border-radius: 8px;
-  color: #e9edef;
+  background: $bg-app !important;
+  border: 1px solid $border !important;
+  border-radius: 20px !important;
+  height: 36px;
+
+  :global(.ant-input) {
+    background: $bg-app !important;
+    font-size: 13px;
+    color: $text-primary;
+    &::placeholder { color: $text-muted; }
+  }
+
+  :global(.ant-input-prefix) { color: $text-muted; }
 }
+
+// ── Filter pills ───────────────────────────────────────────────────────────
+
+.filterRow {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.filterPill {
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid $border;
+  cursor: pointer;
+  white-space: nowrap;
+  color: $text-secondary;
+  background: $bg-white;
+  transition: all 0.15s;
+  user-select: none;
+
+  &:hover { border-color: $primary; color: $primary; }
+}
+
+.filterPillActive {
+  background: $primary;
+  border-color: $primary;
+  color: #fff;
+  &:hover { background: $primary-hover; border-color: $primary-hover; color: #fff; }
+}
+
+// ── List wrapper ───────────────────────────────────────────────────────────
 
 .listWrapper {
   flex: 1;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: $border transparent;
 }
 
 .spinner {
@@ -58,22 +78,163 @@
   text-align: center;
 }
 
+.emptyText {
+  text-align: center;
+  padding: 32px 20px;
+  font-size: 13px;
+  color: $text-muted;
+}
+
+// ── Conversation item ──────────────────────────────────────────────────────
+
 .listItem {
-  padding: 12px 16px;
-  border-bottom: 1px solid #202c33;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
   cursor: pointer;
-  background: transparent;
+  border-bottom: 1px solid $border-light;
+  transition: background 0.12s;
 
-  &:hover {
-    background: #202c33;
-  }
+  &:hover { background: $bg-hover; }
+}
 
-  &.active {
-    background: #2a3942;
-  }
+.listItemActive {
+  background: $bg-active;
+  &:hover { background: $bg-active; }
+}
 
-  // Invited rooms get a subtle left-border highlight
-  &.inviteItem {
-    border-left: 3px solid #ea005e;
+.listItemInvite {
+  border-left: 3px solid $danger;
+}
+
+.avatarWrap { position: relative; flex-shrink: 0; }
+
+.presenceDot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid $bg-white;
+  background: $success;
+}
+
+.itemBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.itemName {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemTime {
+  font-size: 11px;
+  color: $text-muted;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.itemBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.itemPreview {
+  font-size: 12.5px;
+  color: $text-secondary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.unreadBadge {
+  min-width: 18px;
+  height: 18px;
+  background: $primary;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.inviteTag {
+  font-size: 10px;
+  background: #fee2e2;
+  color: $danger;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+// ── Bottom tab bar ─────────────────────────────────────────────────────────
+
+.bottomBar {
+  display: flex;
+  border-top: 1px solid $border;
+  background: $bg-white;
+  flex-shrink: 0;
+}
+
+.bottomTab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  transition: background 0.15s;
+
+  &:hover { background: $bg-hover; }
+}
+
+.bottomTabActive {
+  color: $primary;
+  background: $primary-light;
+
+  .bottomTabIcon {
+    background: $primary;
+    color: #fff;
   }
+}
+
+.bottomTabIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: $border;
+  color: $text-secondary;
+  transition: all 0.15s;
 }

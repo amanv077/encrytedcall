@@ -42,17 +42,14 @@ function App() {
   };
 
   const antdThemeConfig = {
-    algorithm: theme.darkAlgorithm,
+    algorithm: theme.defaultAlgorithm,
     token: {
-      colorPrimary: '#00a884',
-      colorBgBase: '#111b21',
-      colorBgElevated: '#2a3942',
-      colorTextBase: '#e9edef',
-    },
-    components: {
-      Layout: {
-        bodyBg: '#0b141a',
-      },
+      colorPrimary: '#006d6a',
+      colorBgBase: '#ffffff',
+      colorBgElevated: '#ffffff',
+      colorTextBase: '#1a1f2e',
+      borderRadius: 8,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     },
   };
 
@@ -61,7 +58,7 @@ function App() {
     <ConfigProvider theme={antdThemeConfig}>
       <div style={{ height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         {loading ? (
-          <Spin size="large" tip="Initializing Secure Session..." style={{ color: '#00a884' }}/>
+          <Spin size="large" tip="Initializing Secure Session..." style={{ color: '#006d6a' }}/>
         ) : isLoggedIn ? (
           <ChatLayout onLogout={handleLogout} />
         ) : (
