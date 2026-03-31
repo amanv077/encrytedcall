@@ -1,0 +1,79 @@
+.sidebar {
+  min-width: 350px;
+  max-width: 400px;
+  width: 30%;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  background-color: #111b21;
+}
+
+.header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #202c33;
+  height: 60px;
+}
+
+.headerIcons {
+  display: flex;
+  gap: 20px;
+  color: #aebac1;
+  font-size: 20px;
+}
+
+.icon {
+  cursor: pointer;
+}
+
+.statusIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px dashed #aebac1;
+  cursor: pointer;
+}
+
+.searchWrapper {
+  padding: 8px 12px;
+  border-bottom: 1px solid #202c33;
+}
+
+.searchInput {
+  background: #202c33;
+  border: none;
+  border-radius: 8px;
+  color: #e9edef;
+}
+
+.listWrapper {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.spinner {
+  padding: 40px;
+  text-align: center;
+}
+
+.listItem {
+  padding: 12px 16px;
+  border-bottom: 1px solid #202c33;
+  cursor: pointer;
+  background: transparent;
+
+  &:hover {
+    background: #202c33;
+  }
+
+  &.active {
+    background: #2a3942;
+  }
+
+  // Invited rooms get a subtle left-border highlight
+  &.inviteItem {
+    border-left: 3px solid #ea005e;
+  }
+}

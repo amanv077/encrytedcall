@@ -1,0 +1,119 @@
+.mainLayout {
+  width: 100%;
+  height: 100%;
+  max-width: 1600px;
+  display: flex;
+  background-color: #111b21;
+}
+
+// ── Right-side content area ───────────────────────────────────────────────────
+
+.contentArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #0b141a;
+  position: relative;
+  overflow: hidden;
+}
+
+// ── Chat column (header + panel) ──────────────────────────────────────────────
+
+.chatColumn {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+// ── Chat header ───────────────────────────────────────────────────────────────
+
+.chatHeader {
+  flex-shrink: 0;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #202c33;
+  height: 60px;
+  border-bottom: 1px solid #2a3942;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.headerInfo {
+  overflow: hidden;
+}
+
+.roomName {
+  color: #e9edef;
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roomSub {
+  color: #8696a0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.headerActions {
+  flex-shrink: 0;
+}
+
+.callBtn {
+  color: #aebac1 !important;
+
+  &:hover:not(:disabled) {
+    color: #e9edef !important;
+    background: rgba(255,255,255,0.05) !important;
+  }
+
+  &:disabled {
+    opacity: 0.4 !important;
+  }
+}
+
+.callBtnActive {
+  color: #00a884 !important;
+  background: rgba(0, 168, 132, 0.12) !important;
+}
+
+.dialerNotice {
+  font-size: 12px;
+  color: #f5222d;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ── Chat panel wrapper (holds ChatPanel + PiP overlay) ────────────────────────
+
+.chatPanelWrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+// ── Welcome placeholder ───────────────────────────────────────────────────────
+
+.welcomePlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  background: #0b141a;
+  gap: 8px;
+}

@@ -1,0 +1,39 @@
+.wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 4px 16px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #182229;
+  border: 1px solid #2a3942;
+  border-radius: 20px;
+  padding: 4px 12px;
+  max-width: 380px;
+}
+
+.label {
+  font-size: 12.5px;
+  color: #8696a0;
+
+  &.missed {
+    color: #f5222d;
+  }
+}
+
+.time {
+  font-size: 11px;
+  color: #66767e;
+}
+
+.callbackBtn {
+  color: #00a884 !important;
+  padding: 0 4px;
+
+  &:hover {
+    color: #06cf9c !important;
+  }
+}
