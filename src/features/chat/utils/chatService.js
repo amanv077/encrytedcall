@@ -34,12 +34,15 @@ class ChatService {
     this._timelineHandler = (event, room, toStartOfTimeline) => {
       // Skip historical events loaded during initial sync
       if (toStartOfTimeline) return;
-      this._handleEvent(event);
+      this._handleEvent(event, false);
     };
 
+    // Event.decrypted fires after the SDK finishes a decryption attempt —
+    // either successfully (event type changes to m.room.message) or with a
+    // permanent failure (isDecryptionFailure() returns true).  In both cases
+    // we want to UPDATE the existing placeholder rather than append a duplicate.
     this._decryptedHandler = (event) => {
-      // Re-process once the SDK has decrypted an encrypted event
-      this._handleEvent(event);
+      this._handleEvent(event, true);
     };
 
     client.on('Room.timeline', this._timelineHandler);
@@ -63,7 +66,12 @@ class ChatService {
     }
   }
 
-  _handleEvent(event) {
+  /**
+   * @param {import('matrix-js-sdk').MatrixEvent} event
+   * @param {boolean} isUpdate  true when called from Event.decrypted — the
+   *   subscriber should REPLACE an existing item rather than append a new one.
+   */
+  _handleEvent(event, isUpdate) {
     const client = matrixManager.getClient();
     if (!client) return;
     const myUserId = client.getUserId();
@@ -71,7 +79,9 @@ class ChatService {
     const item = normalizeMatrixEvent(event, myUserId);
     if (!item) return;
 
-    // Persist to local SQLite
+    item.isUpdate = isUpdate;
+
+    // Persist to local SQLite (overwrites any previous placeholder)
     storageService.saveEvent(item);
 
     // Notify subscribers (hooks, etc.)

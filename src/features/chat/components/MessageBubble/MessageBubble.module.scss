@@ -67,6 +67,17 @@
   opacity: 0.8;
 }
 
+// Applied when a message could not be decrypted
+.bubbleUnreadable {
+  opacity: 0.7;
+  border: 1px solid rgba(250, 173, 20, 0.25);
+}
+
+.bodyMuted {
+  font-style: italic;
+  color: #8696a0 !important;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }

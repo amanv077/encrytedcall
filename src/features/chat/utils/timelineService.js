@@ -68,20 +68,23 @@ export function normalizeMatrixEvent(event, myUserId) {
     };
   }
 
-  // Encrypted event that has not yet been decrypted
+  // Encrypted event — covers both "pending decryption" and "decryption failed"
   if (type === 'm.room.encrypted') {
+    // isDecryptionFailure() is true once the SDK has tried and given up
+    const failed = event.isDecryptionFailure?.() ?? false;
     return {
       type: 'message',
       eventId,
       roomId,
       sender,
       senderName,
-      body: '🔒 Encrypted message (decrypting…)',
+      body: failed ? '🔒 Unable to decrypt' : '🔒 Decrypting…',
       msgtype: 'm.text',
       timestamp,
       isOutgoing,
       isEncrypted: true,
-      status: 'decrypting',
+      status: failed ? 'decrypt_failed' : 'decrypting',
+      isDecryptionFailure: failed,
     };
   }
 

@@ -90,8 +90,15 @@ export function useChat(roomId) {
 
     const unsubscribe = chatService.subscribe((item) => {
       if (item.roomId !== roomId) return;
-      dispatch(appendMessage({ roomId, message: item }));
-      loadedCountRef.current += 1;
+
+      if (item.isUpdate) {
+        // Event.decrypted callback: replace the existing placeholder (same
+        // eventId) with the decrypted content or the "Unable to decrypt" state.
+        dispatch(updateMessage({ roomId, tempId: item.eventId, message: item }));
+      } else {
+        dispatch(appendMessage({ roomId, message: item }));
+        loadedCountRef.current += 1;
+      }
     });
 
     return unsubscribe;

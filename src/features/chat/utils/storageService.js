@@ -119,12 +119,19 @@ class StorageService {
   saveEvent(item) {
     if (!this._db) return;
     if (!item || !item.eventId || !item.roomId) return;
-    // We only store message and call events
     if (item.type !== 'message' && item.type !== 'call') return;
 
+    // Never persist a pending-decryption placeholder.  The SDK fires
+    // Event.decrypted once it has a final result (success OR failure); we
+    // save at that point so only the real content ever hits the DB.
+    if (item.status === 'decrypting') return;
+
     try {
+      // INSERT OR REPLACE overwrites any existing row for the same event_id.
+      // This is critical for E2EE messages: the first save might be a stale
+      // placeholder from a previous session; the decrypted version must win.
       this._db.exec({
-        sql: `INSERT OR IGNORE INTO messages
+        sql: `INSERT OR REPLACE INTO messages
               (event_id, room_id, sender, sender_name, type, body, msgtype,
                timestamp, is_outgoing, is_encrypted, call_type, call_outcome)
               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -144,10 +151,7 @@ class StorageService {
         ],
       });
     } catch (err) {
-      // Duplicate event_id will be silently ignored by INSERT OR IGNORE.
-      if (!err.message?.includes('UNIQUE constraint')) {
-        console.error('[storageService] saveEvent error:', err);
-      }
+      console.error('[storageService] saveEvent error:', err);
     }
   }
 

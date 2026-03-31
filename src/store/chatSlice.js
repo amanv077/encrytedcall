@@ -36,13 +36,24 @@ const chatSlice = createSlice({
       }
     },
     updateMessage(state, action) {
-      // replace a local-echo message with the confirmed event
+      // Replace a message by tempId (local echo or eventId for in-place updates).
       const { roomId, tempId, message } = action.payload;
       const msgs = state.messagesByRoom[roomId];
       if (!msgs) return;
-      const idx = msgs.findIndex((m) => m.eventId === tempId);
+
+      // Race condition guard: Room.timeline may fire before sendMessage resolves,
+      // causing the real event to already be in the list while the echo is still
+      // there too.  Remove any pre-existing entry that carries the new eventId
+      // BEFORE replacing the echo — otherwise we'd end up with two copies.
+      const deduped =
+        message.eventId && message.eventId !== tempId
+          ? msgs.filter((m) => m.eventId !== message.eventId)
+          : msgs;
+
+      const idx = deduped.findIndex((m) => m.eventId === tempId);
       if (idx !== -1) {
-        state.messagesByRoom[roomId][idx] = message;
+        deduped[idx] = message;
+        state.messagesByRoom[roomId] = deduped;
       }
     },
     setLoading(state, action) {

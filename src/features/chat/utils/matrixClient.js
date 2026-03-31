@@ -77,13 +77,13 @@ class MatrixClientManager {
       accessToken,
       userId,
       deviceId,
-      // Prevents the "constructor vs store" mismatch by ensuring we use a fresh store if desired
-      // but usually reuse is good. The mismatch happens if deviceId changes.
     });
 
-    // Enable E2EE crypto (Rust SDK)
+    // Enable E2EE crypto (Rust SDK preferred, legacy JS crypto as fallback)
+    this._usingRustCrypto = false;
     if (this.client.initRustCrypto) {
         await this.client.initRustCrypto();
+        this._usingRustCrypto = true;
     } else if (this.client.initCrypto) {
         await this.client.initCrypto();
     }
@@ -99,24 +99,115 @@ class MatrixClientManager {
         const timeout = setTimeout(() => {
             if (!this.isReady) {
                 console.warn("Matrix sync timed out, but proceeding...");
-                this.isReady = true; // Fallback
+                this.isReady = true;
                 resolve(this.client);
             }
         }, 15000);
 
-        this.client.once('sync', (state) => {
+        this.client.once('sync', async (state) => {
             if (state === 'PREPARED') {
                 clearTimeout(timeout);
                 this.isReady = true;
+                // Enable key backup after the first successful sync so the
+                // client can upload new session keys and restore backed-up ones.
+                await this._enableKeyBackup(this.client);
                 resolve(this.client);
             }
         });
 
         this.client.on('error', (err) => {
             console.error("Client error event:", err);
-            // This could be the source of your error
         });
     });
+  }
+
+  /**
+   * Ensures the Rust (or legacy JS) key backup is enabled on this device.
+   *
+   * Flow:
+   *  1. Try to connect to the existing server-side backup with
+   *     checkKeyBackupAndEnable(). This succeeds only when the device already
+   *     holds the backup private key (stored in SSSS on a previous session).
+   *  2. If that returns null it means the private key is not on this device
+   *     (no SSSS set up, or fresh login). In that case we call resetKeyBackup()
+   *     to generate a new key pair, store the private key locally, and create a
+   *     new backup version on the server. All Megolm session keys from this
+   *     point on will be backed up and restorable on this device.
+   *
+   * Note: messages encrypted under the old backup version (before this call)
+   * are only recoverable if the sender comes back online and re-shares the key
+   * via the key-request mechanism below.
+   *
+   * Non-fatal: failure here does not break E2EE — it only affects key recovery.
+   */
+  async _enableKeyBackup(client) {
+    try {
+      if (this._usingRustCrypto) {
+        const cryptoApi = client.getCrypto?.();
+        if (!cryptoApi) {
+          console.warn('[KeyBackup] getCrypto() returned null — skipping backup setup.');
+          return;
+        }
+
+        if (cryptoApi.checkKeyBackupAndEnable) {
+          let result = await cryptoApi.checkKeyBackupAndEnable();
+
+          if (result) {
+            console.log(
+              '[KeyBackup] Rust crypto: connected to existing backup, version:',
+              result.backupInfo?.version ?? '(unknown)',
+            );
+          } else {
+            // The device doesn't have the backup private key — this happens on
+            // every fresh login when SSSS is not configured. Reset the backup so
+            // this device generates its own key pair and starts a fresh backup
+            // version that it can actually use.
+            console.warn(
+              '[KeyBackup] Rust crypto: could not authenticate existing backup ' +
+              '(no private key on this device). Resetting backup...',
+            );
+            if (cryptoApi.resetKeyBackup) {
+              await cryptoApi.resetKeyBackup();
+              // Give the server a moment to register the new version
+              result = await cryptoApi.checkKeyBackupAndEnable();
+              if (result) {
+                console.log(
+                  '[KeyBackup] Rust crypto: new backup created and enabled, version:',
+                  result.backupInfo?.version ?? '(unknown)',
+                );
+              } else {
+                console.warn('[KeyBackup] Rust crypto: backup reset but still could not enable.');
+              }
+            } else {
+              console.warn('[KeyBackup] resetKeyBackup() not available on this SDK version.');
+            }
+          }
+        } else {
+          console.warn('[KeyBackup] checkKeyBackupAndEnable() not available on this SDK version.');
+        }
+      } else {
+        // Legacy JS crypto
+        const backupInfo = await client.getKeyBackupVersion();
+        if (backupInfo && !client.getKeyBackupEnabled()) {
+          await client.enableKeyBackup(backupInfo);
+          console.log('[KeyBackup] Legacy crypto: backup enabled, version:', backupInfo.version);
+        }
+      }
+
+      // For any event that still fails to decrypt after backup setup, ask the
+      // sender's other online devices to re-share the room key (key gossiping).
+      client.on('Event.decrypted', (event) => {
+        if (event.isDecryptionFailure()) {
+          try {
+            client.cancelAndResendEventRoomKeyRequest(event, true);
+          } catch (_) {
+            // Not available on all SDK versions — safe to ignore
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('[KeyBackup] Could not enable key backup:', err.message ?? err);
+    }
   }
 
   _saveSession(session) {
