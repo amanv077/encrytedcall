@@ -116,9 +116,14 @@
   flex-shrink: 0;
 }
 
-.globalSearch {
+.globalSearchWrap {
   flex: 1;
   max-width: 480px;
+  position: relative;
+}
+
+.globalSearch {
+  width: 100%;
   background: $bg-app !important;
   border-radius: 8px;
 
@@ -128,6 +133,77 @@
     color: $text-secondary;
     &::placeholder { color: $text-muted; }
   }
+}
+
+// ── Global search results dropdown ────────────────────────────────────────────
+
+.globalDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: $bg-white;
+  border: 1px solid $border;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.globalDropLoading,
+.globalDropEmpty {
+  padding: 16px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.globalDropItem {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid $border-light;
+  transition: background 0.12s;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: $bg-app; }
+}
+
+.globalDropRoom {
+  font-size: 11px;
+  font-weight: 600;
+  color: $primary;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 2px;
+}
+
+.globalDropBody {
+  font-size: 13px;
+  color: $text-primary;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  :global(mark) {
+    background: #fff3cd;
+    color: $text-primary;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+}
+
+.globalDropMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: $text-muted;
+  margin-top: 3px;
 }
 
 .topBarRight {
