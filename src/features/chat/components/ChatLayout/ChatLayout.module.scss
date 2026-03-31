@@ -1,103 +1,281 @@
-.mainLayout {
+@import '../../../../shared/styles/variables';
+
+// ── App shell: nav rail + everything else ────────────────────────────────────
+
+.appShell {
   width: 100%;
   height: 100%;
-  max-width: 1600px;
   display: flex;
-  background-color: #111b21;
+  background: $bg-app;
+  overflow: hidden;
 }
 
-// ── Right-side content area ───────────────────────────────────────────────────
+// ── Left navigation rail ─────────────────────────────────────────────────────
 
-.contentArea {
+.navRail {
+  width: $nav-width;
+  min-width: $nav-width;
+  background: $bg-white;
+  border-right: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  z-index: 10;
+}
+
+.navLogo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 4px;
+}
+
+.logoCircle {
+  width: 36px;
+  height: 36px;
+  background: $primary;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoText {
+  font-size: 9px;
+  font-weight: 700;
+  color: $primary;
+  letter-spacing: 0.5px;
+}
+
+.navItems {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.navItem {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  color: $text-secondary;
+  font-size: 18px;
+
+  &:hover { background: $bg-hover; color: $primary; }
+}
+
+.navItemActive {
+  background: $primary-light;
+  color: $primary;
+
+  &:hover { background: $primary-light; }
+}
+
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navBottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.navAvatar {
+  cursor: pointer;
+  border: 2px solid $border;
+}
+
+// ── Main content (right of nav rail) ─────────────────────────────────────────
+
+.mainContent {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #0b141a;
-  position: relative;
   overflow: hidden;
 }
 
-// ── Chat column (header + panel) ──────────────────────────────────────────────
+// ── Top bar ───────────────────────────────────────────────────────────────────
 
-.chatColumn {
+.topBar {
+  height: $header-height;
+  min-height: $header-height;
+  background: $bg-white;
+  border-bottom: 1px solid $border;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.globalSearch {
+  flex: 1;
+  max-width: 480px;
+  background: $bg-app !important;
+  border-radius: 8px;
+
+  :global(.ant-input) {
+    background: $bg-app;
+    font-size: 13.5px;
+    color: $text-secondary;
+    &::placeholder { color: $text-muted; }
+  }
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.langToggle {
+  font-size: 13px;
+  color: $primary;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.langDivider {
+  margin: 0 4px;
+  color: $border;
+}
+
+.topBarBtn {
+  color: $text-secondary !important;
+  &:hover { color: $primary !important; background: $primary-light !important; }
+}
+
+// ── Body row ──────────────────────────────────────────────────────────────────
+
+.bodyRow {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+// ── Sidebar column ────────────────────────────────────────────────────────────
+
+.sidebarCol {
+  width: $sidebar-width;
+  min-width: $sidebar-width;
+  background: $bg-white;
+  border-right: 1px solid $border;
   display: flex;
   flex-direction: column;
-  height: 100%;
   overflow: hidden;
+}
+
+.sidebarTop {
+  height: $header-height;
+  min-height: $header-height;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid $border;
+  flex-shrink: 0;
+}
+
+.sidebarTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.newChatBtn {
+  color: $primary !important;
+  &:hover { background: $primary-light !important; }
+}
+
+// ── Chat column ───────────────────────────────────────────────────────────────
+
+.chatCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: $bg-chat;
+  overflow: hidden;
+  position: relative;
 }
 
 // ── Chat header ───────────────────────────────────────────────────────────────
 
 .chatHeader {
-  flex-shrink: 0;
-  padding: 0 16px;
+  height: $header-height;
+  min-height: $header-height;
+  background: $bg-white;
+  border-bottom: 1px solid $border;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #202c33;
-  height: 60px;
-  border-bottom: 1px solid #2a3942;
+  padding: 0 16px;
+  flex-shrink: 0;
 }
 
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   overflow: hidden;
 }
 
-.headerInfo {
-  overflow: hidden;
-}
-
-.roomName {
-  color: #e9edef;
-  font-size: 16px;
-  font-weight: 500;
+.headerName {
+  font-size: 15px;
+  font-weight: 600;
+  color: $text-primary;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.roomSub {
-  color: #8696a0;
+.headerSub {
   font-size: 12px;
-  display: flex;
-  align-items: center;
+  color: $text-secondary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.headerActions {
-  flex-shrink: 0;
+.headerActions { flex-shrink: 0; }
+
+.headerBtn {
+  color: $text-secondary !important;
+  &:hover { color: $primary !important; background: $primary-light !important; }
+  &:disabled { opacity: 0.4 !important; }
 }
 
-.callBtn {
-  color: #aebac1 !important;
-
-  &:hover:not(:disabled) {
-    color: #e9edef !important;
-    background: rgba(255,255,255,0.05) !important;
-  }
-
-  &:disabled {
-    opacity: 0.4 !important;
-  }
-}
-
-.callBtnActive {
-  color: #00a884 !important;
-  background: rgba(0, 168, 132, 0.12) !important;
+.headerBtnActive {
+  color: $primary !important;
+  background: $primary-light !important;
 }
 
 .dialerNotice {
   font-size: 12px;
-  color: #f5222d;
-  max-width: 200px;
+  color: $danger;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-// ── Chat panel wrapper (holds ChatPanel + PiP overlay) ────────────────────────
+// ── Chat panel wrapper ────────────────────────────────────────────────────────
 
 .chatPanelWrapper {
   flex: 1;
@@ -113,7 +291,29 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 40px;
-  background: #0b141a;
-  gap: 8px;
+  gap: 12px;
+}
+
+.welcomeIcon {
+  width: 72px;
+  height: 72px;
+  background: $primary-light;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.welcomeTitle {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: $text-primary !important;
+}
+
+.welcomeSub {
+  font-size: 14px !important;
+  color: $text-secondary !important;
+  text-align: center !important;
+  line-height: 1.6 !important;
 }
