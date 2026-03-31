@@ -224,10 +224,19 @@ const api = {
   /**
    * Generate session key + open OPFS database.
    * Must be called once before any other method.
+   *
+   * Wipes any rows left from a previous session after opening the DB.
+   * Those rows are encrypted with a key that no longer exists and are
+   * permanently unreadable; keeping them would cause loadInitial() to
+   * skip the Matrix SDK fallback (it checks items.length > 0) so the
+   * UI would show blank messages and FTS5 would remain empty.
+   * A clean slate lets the Matrix SDK re-populate everything with the
+   * new session key.
    */
   async init() {
     await _generateSessionKey();
     await _initDb();
+    api.clearAll();   // wipe stale rows encrypted with the previous key
   },
 
   /**

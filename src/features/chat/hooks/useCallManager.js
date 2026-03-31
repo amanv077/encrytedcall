@@ -167,16 +167,72 @@ export function useCallManager() {
 
   const answerCall = async () => {
     if (!incomingCall) return;
+    const call = incomingCall;
+
+    // Reset all call state so the UI is never left stuck on the overlay.
+    const _cleanupFailedAnswer = (reason) => {
+      console.error('[useCallManager] answerCall failed:', reason);
+      try {
+        if (!call.callHasEnded?.()) call.hangup('user_media_failed', true);
+      } catch (_) {}
+      clearActiveCallListeners();
+      setIncomingCall(null);
+      setActiveCall(null);
+      setCallState('idle');
+      setLocalStream(null);
+      setRemoteStream(null);
+      setIsMuted(false);
+      setIsVideoOff(false);
+      setIsScreenSharing(false);
+      dispatch(setCallMode('hidden'));
+    };
+
     try {
-      await incomingCall.answer(true, incomingCall.hasRemoteUserMediaVideoTrack);
-      setActiveCall(incomingCall);
+      // ── Pre-flight media probe ────────────────────────────────────────────
+      // The Matrix SDK's shouldAnswerWithMediaType() loop cannot be broken by
+      // a Promise.race timeout because it runs in synchronous microtasks.
+      // Instead we probe getUserMedia BEFORE calling answer() so we know what
+      // the browser can actually provide, then patch the call object to match.
+      let probeStream = null;
+      let canVideo    = false;
+
+      try {
+        probeStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        canVideo    = true;
+      } catch {
+        // Video unavailable — try audio-only
+        try {
+          probeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+          throw new Error('No microphone/camera available to answer this call.');
+        }
+      }
+
+      // Release the probe tracks immediately — the SDK re-acquires them in answer()
+      probeStream.getTracks().forEach((t) => t.stop());
+
+      if (!canVideo) {
+        // hasRemoteUserMediaVideoTrack is a getter-only property on MatrixCall,
+        // so direct assignment throws. Override it on this instance so that
+        // shouldAnswerWithMediaType() stops forcing video=true in its retry loop
+        // and allows the call to be answered audio-only.
+        Object.defineProperty(call, 'hasRemoteUserMediaVideoTrack', {
+          get: () => false,
+          configurable: true,
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      await call.answer();
+
+      setActiveCall(call);
       setIncomingCall(null);
       setCallState('connected');
       dispatch(setCallMode('pip'));
-      bindActiveCallListeners(incomingCall);
-      syncStreamsFromCall(incomingCall);
+      bindActiveCallListeners(call);
+      syncStreamsFromCall(call);
     } catch (e) {
-      console.error('[useCallManager] answerCall error:', e);
+      _cleanupFailedAnswer(e);
     }
   };
 

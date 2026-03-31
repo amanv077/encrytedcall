@@ -63,10 +63,16 @@ export function useChat(roomId) {
         ? await storageService.getMessages(roomId, PAGE_SIZE, 0)
         : [];
 
+      // If every item has an empty body the rows were encrypted with a
+      // previous session key (now destroyed) — treat that as "no usable
+      // data" so we always fall through to the Matrix SDK fallback.
+      const hasUsableContent = items.some((m) => m.body && m.body.trim().length > 0);
+      if (!hasUsableContent) items = [];
+
       // 2. If SQLite has nothing, hydrate from the Matrix SDK's in-memory timeline
       if (items.length === 0) {
         items = chatService.getInMemoryTimeline(roomId);
-        // Also persist those items
+        // Persist so FTS5 is populated for search this session
         items.forEach((item) => storageService.saveEvent(item));
       }
 
