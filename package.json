@@ -1,5 +1,5 @@
 {
-  "name": "encryptcall",
+  "name": "matrix-poc",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,10 +10,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide-react": "^1.7.0",
-    "matrix-js-sdk": "^41.2.0",
+    "@ant-design/icons": "^5.14.0",
+    "@matrix-org/matrix-sdk-crypto-wasm": "^18.0.0",
+    "@reduxjs/toolkit": "^2.11.2",
+    "@sqlite.org/sqlite-wasm": "^3.41.2",
+    "antd": "^6.3.4",
+    "axios": "^1.13.6",
+    "matrix-js-sdk": "^37.5.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "react-redux": "^9.2.0",
+    "react-router-dom": "^7.13.2",
+    "redux": "^5.0.1",
+    "sass": "^1.98.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

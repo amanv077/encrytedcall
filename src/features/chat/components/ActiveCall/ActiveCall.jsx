@@ -1,7 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, ScreenShare, ScreenShareOff } from 'lucide-react';
+import { Button, Tooltip, Typography } from 'antd';
+import { 
+  AudioOutlined, 
+  AudioMutedOutlined, 
+  VideoCameraOutlined,
+  StopOutlined,
+  DesktopOutlined,
+  PhoneOutlined
+} from '@ant-design/icons';
+import styles from './ActiveCall.module.scss';
 
-export default function CallUI({
+const { Text } = Typography;
+
+export default function ActiveCall({
   localStream,
   remoteStream,
   isMuted,
@@ -30,21 +41,15 @@ export default function CallUI({
       setState(false);
       return () => {};
     }
-
     const cleanupFns = [];
-
-    const refresh = () => {
-      setState(hasActiveVideo(stream));
-    };
+    const refresh = () => setState(hasActiveVideo(stream));
 
     const attachTrackListeners = (track) => {
       if (track.kind !== 'video') return;
-
       const onTrackStateChanged = () => refresh();
       track.addEventListener('mute', onTrackStateChanged);
       track.addEventListener('unmute', onTrackStateChanged);
       track.addEventListener('ended', onTrackStateChanged);
-
       cleanupFns.push(() => {
         track.removeEventListener('mute', onTrackStateChanged);
         track.removeEventListener('unmute', onTrackStateChanged);
@@ -53,23 +58,20 @@ export default function CallUI({
     };
 
     stream.getVideoTracks().forEach(attachTrackListeners);
-
     const onTrackAdded = (event) => {
       attachTrackListeners(event.track);
       refresh();
     };
-
     const onTrackRemoved = () => refresh();
+    
     stream.addEventListener('addtrack', onTrackAdded);
     stream.addEventListener('removetrack', onTrackRemoved);
-
     cleanupFns.push(() => {
       stream.removeEventListener('addtrack', onTrackAdded);
       stream.removeEventListener('removetrack', onTrackRemoved);
     });
 
     refresh();
-
     return () => cleanupFns.forEach((fn) => fn());
   };
 
@@ -80,7 +82,6 @@ export default function CallUI({
 
   useEffect(() => {
     if (!localVideoRef.current) return;
-
     localVideoRef.current.srcObject = localStream || null;
     if (localStream) {
       localVideoRef.current.play().catch(() => {});
@@ -92,7 +93,6 @@ export default function CallUI({
 
   useEffect(() => {
     if (!remoteVideoRef.current) return;
-
     remoteVideoRef.current.srcObject = remoteStream || null;
     if (remoteStream) {
       remoteVideoRef.current.play().catch(() => {});
@@ -103,79 +103,95 @@ export default function CallUI({
   }, [remoteStream]);
 
   return (
-    <div className="call-ui-container">
+    <div className={styles.callContainer}>
+      
       {/* Remote Video (Full Screen) */}
-      <div className={`remote-video-wrapper ${hasRemoteVideo ? 'has-video' : 'no-video'}`}>
+      <div className={styles.remoteVideoWrapper}>
         <video
           ref={remoteVideoRef}
-          className={`remote-video ${isAudioMode ? 'audio-hidden' : ''}`}
+          className={styles.remoteVideo}
           autoPlay
           playsInline
+          style={{ opacity: isAudioMode ? 0 : 1 }}
         />
+        
         {isAudioMode && (
-          <div className="audio-mode-overlay">
-            <div className="audio-pulse-ring ring-one" />
-            <div className="audio-pulse-ring ring-two" />
-            <div className="audio-pulse-ring ring-three" />
-            <div className="audio-core">
-              <div className={`audio-core-icon ${isMuted ? 'muted' : ''}`}>
-                {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
+          <div className={styles.audioModeOverlay}>
+            <div className={styles.audioModeBox}>
+              <div className={`${styles.audioIcon} ${isMuted ? styles.muted : ''}`}>
+                {isMuted ? <AudioMutedOutlined /> : <AudioOutlined />}
               </div>
-              <p className="audio-core-title">Secure Audio Call</p>
-              <p className="audio-core-subtitle">
-                {callState === 'calling' ? 'Connecting...' : 'Voice channel active'}
-              </p>
+              <Text className={styles.audioTitle}>Secure Audio Call</Text>
+              <br />
+              <Text style={{ color: '#8696a0' }}>{callState === 'calling' ? 'Connecting...' : 'Voice channel active'}</Text>
             </div>
           </div>
         )}
+        
         {showRemoteCameraStatus && (
-          <div className="call-status-overlay">
+          <div className={styles.statusOverlay}>
             {callState === 'calling' ? 'Calling...' : 'Remote camera is off'}
           </div>
         )}
       </div>
 
       {/* Local Video (Picture-in-Picture) */}
-      <div className={`local-video-wrapper ${hasLocalVideo ? 'has-video' : 'no-video'}`}>
+      <div className={styles.localVideoWrapper} style={{ display: hasLocalVideo ? 'block' : 'flex' }}>
         <video
           ref={localVideoRef}
-          className="local-video"
+          className={styles.localVideo}
           autoPlay
           playsInline
           muted
+          style={{ display: hasLocalVideo ? 'block' : 'none' }}
         />
         {!hasLocalVideo && isVideoOff && (
-          <div className="local-video-placeholder">Camera Off</div>
+          <span style={{ color: '#8696a0' }}>Camera Off</span>
         )}
       </div>
 
       {/* Call Controls Overlay */}
-      <div className="controls-overlay">
-        <button 
-          onClick={toggleMute} 
-          className={`control-btn ${isMuted ? 'muted' : ''}`}
-        >
-          {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-        </button>
+      <div className={styles.controlsOverlay}>
+        <Tooltip title={isMuted ? "Unmute" : "Mute"}>
+          <Button 
+            shape="circle" 
+            size="large" 
+            icon={isMuted ? <AudioMutedOutlined /> : <AudioOutlined />} 
+            onClick={toggleMute}
+            style={{ width: 56, height: 56, fontSize: 24, background: isMuted ? '#fff' : 'rgba(255,255,255,0.1)', color: isMuted ? '#111b21' : '#fff', border: 'none' }}
+          />
+        </Tooltip>
 
-        <button 
-          onClick={toggleVideo} 
-          className={`control-btn ${isVideoOff ? 'muted' : ''}`}
-        >
-          {isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
-        </button>
+        <Tooltip title={isVideoOff ? "Turn on camera" : "Turn off camera"}>
+          <Button 
+            shape="circle" 
+            size="large" 
+            icon={isVideoOff ? <StopOutlined /> : <VideoCameraOutlined />} 
+            onClick={toggleVideo}
+            style={{ width: 56, height: 56, fontSize: 24, background: isVideoOff ? '#fff' : 'rgba(255,255,255,0.1)', color: isVideoOff ? '#111b21' : '#fff', border: 'none' }}
+          />
+        </Tooltip>
 
-        <button
-          onClick={toggleScreenShare}
-          className={`control-btn ${isScreenSharing ? 'active' : ''}`}
-          title={isScreenSharing ? "Stop screen share" : "Share screen"}
-        >
-          {isScreenSharing ? <ScreenShareOff size={24} /> : <ScreenShare size={24} />}
-        </button>
+        <Tooltip title={isScreenSharing ? "Stop screen share" : "Share screen"}>
+          <Button 
+            shape="circle" 
+            size="large" 
+            icon={<DesktopOutlined />} 
+            onClick={toggleScreenShare}
+            style={{ width: 56, height: 56, fontSize: 24, background: isScreenSharing ? '#00a884' : 'rgba(255,255,255,0.1)', color: '#fff', border: 'none' }}
+          />
+        </Tooltip>
 
-        <button className="control-btn hangup-btn" onClick={endCall}>
-          <PhoneOff size={24} />
-        </button>
+        <Tooltip title="End Call">
+          <Button 
+            shape="circle" 
+            size="large" 
+            danger
+            icon={<PhoneOutlined style={{ transform: 'rotate(135deg)' }} />} 
+            onClick={endCall}
+            style={{ width: 56, height: 56, fontSize: 24, background: '#f5222d', color: '#fff', border: 'none' }}
+          />
+        </Tooltip>
       </div>
     </div>
   );

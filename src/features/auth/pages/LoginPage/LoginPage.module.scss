@@ -1,0 +1,47 @@
+.loginContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: #0c1317;
+}
+
+.card {
+  width: 400px;
+  background: #202c33;
+  border: none;
+  box-shadow: 0 12px 24px rgba(0,0,0,0.5);
+}
+
+.bodyStyle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.icon {
+  font-size: 48px;
+  color: #00a884;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0;
+  color: #e9edef;
+}
+
+.subtitle {
+  margin-bottom: 32px;
+  color: #8696a0;
+}
+
+.input {
+  background: #2a3942;
+  border: none;
+  color: #fff;
+}
+
+.btnPrimary {
+  background: #00a884;
+  border: none;
+}

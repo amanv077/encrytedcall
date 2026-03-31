@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { callService } from '../services/callService';
+import { callService } from '../utils/callService';
 
-export function useCall() {
+export function useCallManager() {
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [callState, setCallState] = useState('idle');
@@ -102,7 +102,7 @@ export function useCall() {
 
     // Watch for Matrix readiness to attach listeners
     const checkReady = setInterval(() => {
-      import('../services/matrixClient').then(({ matrixManager }) => {
+      import('../utils/matrixClient').then(({ matrixManager }) => {
         if (matrixManager.isReady) {
           callService.initCallListeners(handleIncoming);
           clearInterval(checkReady);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { matrixManager } from '../services/matrixClient';
+import { matrixManager } from '../utils/matrixClient';
 
 export function useMatrixData() {
   const [rooms, setRooms] = useState([]);
