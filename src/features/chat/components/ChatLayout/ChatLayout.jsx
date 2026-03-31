@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Typography, Button, Space, Avatar, Tooltip, Input } from 'antd';
+import { Typography, Button, Space, Avatar, Tooltip, Input, Dropdown } from 'antd';
 import {
   PhoneOutlined,
   VideoCameraOutlined,
@@ -172,13 +172,27 @@ export default function ChatLayout({ onLogout }) {
         </div>
 
         <div className={styles.navBottom}>
-          <NavItem icon={<SettingOutlined />} label="Settings" />
-          <Avatar
-            src={client?.getUser(myUserId)?.avatarUrl || undefined}
-            icon={<UserOutlined />}
-            size={36}
-            className={styles.navAvatar}
-          />
+          <Tooltip title="Settings" placement="right">
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'logout',
+                    label: 'Sign out',
+                    danger: true,
+                    icon: <span style={{ fontSize: 14 }}>⎋</span>,
+                    onClick: onLogout,
+                  },
+                ],
+              }}
+              trigger={['click']}
+              placement="topRight"
+            >
+              <div className={styles.navItem}>
+                <span className={styles.navIcon}><SettingOutlined /></span>
+              </div>
+            </Dropdown>
+          </Tooltip>
         </div>
       </nav>
 
