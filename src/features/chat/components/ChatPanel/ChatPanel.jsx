@@ -166,7 +166,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       <div className={styles.emptyState}>
         <Empty
           description={
-            <Text style={{ color: '#8696a0' }}>
+            <Text style={{ color: '#9ba8b5' }}>
               Select a conversation from the sidebar
             </Text>
           }
@@ -192,7 +192,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       {/* E2EE banner */}
       {isEncrypted && (
         <div className={styles.encryptionBanner}>
-          <LockOutlined style={{ marginRight: 5 }} />
+          <LockOutlined />
           Messages are end-to-end encrypted. No one outside this conversation can read them.
         </div>
       )}
@@ -202,11 +202,11 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
         <div className={styles.searchBar}>
           <Input
             autoFocus
-            prefix={<SearchOutlined style={{ color: '#8696a0' }} />}
+            prefix={<SearchOutlined style={{ color: '#9ba8b5' }} />}
             suffix={
               isSearching
                 ? <Spin size="small" />
-                : <CloseOutlined style={{ color: '#8696a0', cursor: 'pointer' }} onClick={onCloseSearch} />
+                : <CloseOutlined style={{ color: '#9ba8b5', cursor: 'pointer' }} onClick={onCloseSearch} />
             }
             placeholder="Search messages in this chat…"
             value={searchQuery}
@@ -228,8 +228,8 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
         <div className={styles.searchResults}>
           {searchResults.length === 0 && !isSearching && (
             <div className={styles.noMessages}>
-              <SearchOutlined style={{ fontSize: 28, marginBottom: 8, color: '#8696a0' }} />
-              <Text style={{ color: '#8696a0' }}>No messages match your search</Text>
+              <SearchOutlined style={{ fontSize: 28, marginBottom: 8, color: '#9ba8b5' }} />
+              <Text style={{ color: '#9ba8b5' }}>No messages match your search</Text>
             </div>
           )}
           {searchResults.map((item) => (
@@ -264,8 +264,8 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
 
           {timeline.length === 0 && !isLoading && (
             <div className={styles.noMessages}>
-              <LockOutlined style={{ fontSize: 28, marginBottom: 8, color: '#8696a0' }} />
-              <Text style={{ color: '#8696a0' }}>
+              <LockOutlined style={{ fontSize: 28, marginBottom: 8, color: '#9ba8b5' }} />
+              <Text style={{ color: '#9ba8b5' }}>
                 {isEncrypted
                   ? 'This is an end-to-end encrypted conversation.'
                   : 'Start the conversation.'}

@@ -1,34 +1,30 @@
+@import '../../../../shared/styles/variables';
+
 .modalBody {
   text-align: center;
   padding: 24px 0;
 }
 
-.modalContent {
-  background: #202c33;
-  border-radius: 16px;
-}
-
 .title {
-  color: #e9edef;
+  color: $text-primary;
   margin: 0;
 }
 
 .callerId {
-  color: #8696a0;
+  color: $text-secondary;
   display: block;
   margin-bottom: 32px;
 }
 
-.btnGroup {
-  justify-content: center;
-}
+.btnGroup { justify-content: center; }
 
 .btnAccept {
   width: 64px;
   height: 64px;
   font-size: 24px;
-  background: #00a884;
-  border-color: #00a884;
+  background: $primary !important;
+  border-color: $primary !important;
+  &:hover { background: $primary-hover !important; border-color: $primary-hover !important; }
 }
 
 .btnReject {

@@ -1,27 +1,113 @@
-.inputRow {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #202c33;
-  border-top: 1px solid #2a3942;
+@import '../../../../shared/styles/variables';
+
+// ── Outer container ───────────────────────────────────────────────────────────
+
+.inputArea {
+  background: $bg-white;
+  border-top: 1px solid $border;
   flex-shrink: 0;
 }
+
+// ── Action chips row ──────────────────────────────────────────────────────────
+
+.chipsRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid $border-light;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  background: $bg-white;
+  border: 1px solid $border;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: $text-secondary;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+
+  &:hover:not(:disabled) {
+    border-color: $primary;
+    color: $primary;
+    background: $primary-light;
+  }
+
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+}
+
+.chipLabel { font-size: 12.5px; }
+
+// ── Composer row ──────────────────────────────────────────────────────────────
+
+.composerRow {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 10px;
+  gap: 4px;
+}
+
+// Round icon button (paperclip, mic, send)
+.iconBtn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  color: $text-secondary;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  padding: 0;
+
+  &:hover:not(:disabled) {
+    background: $bg-app;
+    color: $primary;
+  }
+
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.sendBtn {
+  background: $primary !important;
+  color: #fff !important;
+
+  &:hover:not(:disabled) {
+    background: $primary-hover !important;
+    transform: scale(1.05);
+  }
+}
+
+// ── Text input field ──────────────────────────────────────────────────────────
 
 .inputWrapper {
   flex: 1;
   display: flex;
   align-items: center;
-  background: #2a3942;
-  border-radius: 8px;
-  padding: 0 12px;
-  min-height: 42px;
   gap: 8px;
+  // No border — flat look like the reference image
+  padding: 0 8px;
+  min-height: 38px;
 }
 
 .lockIcon {
-  color: #8696a0;
-  font-size: 13px;
+  color: $text-muted;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
@@ -31,41 +117,16 @@
   border: none;
   outline: none;
   resize: none;
-  color: #e9edef;
+  color: $text-primary;
   font-size: 14.5px;
-  line-height: 20px;
-  padding: 10px 0;
+  line-height: 22px;
+  padding: 6px 0;
   font-family: inherit;
   max-height: 120px;
   overflow-y: auto;
-
-  &::placeholder {
-    color: #8696a0;
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
-  // Auto-grow: handled by the rows attribute + max-height overflow
   scrollbar-width: thin;
-  scrollbar-color: #3b4a54 transparent;
-}
+  scrollbar-color: $border transparent;
 
-.sendBtn {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  background: #00a884 !important;
-  border-color: #00a884 !important;
-
-  &:hover:not(:disabled) {
-    background: #06cf9c !important;
-    border-color: #06cf9c !important;
-  }
-
-  &:disabled {
-    opacity: 0.4;
-  }
+  &::placeholder { color: $text-muted; }
+  &:disabled { cursor: not-allowed; opacity: 0.5; }
 }

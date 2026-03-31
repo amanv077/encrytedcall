@@ -1,4 +1,42 @@
-$wa-bg-default: #111b21;
-$wa-bg-app: #0c1317;
-$wa-bg-chat: #0b141a;
-$wa-color-primary: #00a884;
+// ── SynApp Design Tokens ─────────────────────────────────────────────────────
+
+// Primary teal
+$primary:        #006d6a;
+$primary-hover:  #005a57;
+$primary-light:  #e6f5f4;
+$primary-medium: #b3dedd;
+
+// Backgrounds
+$bg-app:         #f4f6f8;
+$bg-white:       #ffffff;
+$bg-chat:        #f0f2f5;
+$bg-nav:         #ffffff;
+$bg-hover:       #f7f9fb;
+$bg-active:      #e6f5f4;
+
+// Text
+$text-primary:   #1a1f2e;
+$text-secondary: #6b7585;
+$text-muted:     #9ba8b5;
+
+// Borders
+$border:         #e4e8ec;
+$border-light:   #f0f3f6;
+
+// Status
+$danger:         #e53e3e;
+$warning:        #d69e2e;
+$success:        #38a169;
+$unread-badge:   #006d6a;
+
+// Shadows
+$shadow-sm:      0 1px 3px rgba(0,0,0,0.08);
+$shadow-md:      0 4px 12px rgba(0,0,0,0.1);
+
+// Dimensions
+$nav-width:      68px;
+$sidebar-width:  300px;
+$header-height:  56px;
+
+// WhatsApp compat alias (keep existing references happy)
+$wa-bg-app: $bg-app;
