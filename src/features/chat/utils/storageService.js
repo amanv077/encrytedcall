@@ -1,265 +1,169 @@
 /**
- * storageService – persistent local message storage using SQLite WASM (OPFS backend).
+ * storageService — main-thread façade for the encrypted SQLite Web Worker.
  *
- * The Origin Private File System (OPFS) keeps the database inside the browser's
- * sandboxed storage, so it is never accessible to other origins and is wiped
- * automatically when the user clears site data.
+ * Architecture
+ * ────────────
+ *   Main thread  ──Comlink──▶  db.worker.js  ──▶  SQLite WASM (OPFS)
  *
- * GDPR note: the database only holds already-decrypted message text that the
- * Matrix client has already processed in-browser. No additional server round-
- * trips are made. `clearAll()` removes all rows, which must be called on logout.
+ * The AES-GCM 256-bit session key lives ONLY in the worker's heap.
+ * It is generated with extractable:false — it can never be serialised or
+ * posted back to this thread.  Every message body is AES-GCM encrypted
+ * before touching disk.  body_plain is cleared immediately after FTS5
+ * indexing so no cleartext persists in the OPFS file.
+ *
+ * All public methods are async (Comlink transparently wraps worker calls in
+ * Promises). Callers that don't need the result can fire-and-forget safely.
  */
 
-const DB_NAME = 'encryptcall.db';
-const PAGE_SIZE = 50;
+import { wrap } from 'comlink';
+
+// Lazily created — the worker is only instantiated on first call to init().
+let _worker = null;
+let _api = null;
+
+function _getApi() {
+  if (!_api) {
+    _worker = new Worker(
+      new URL('../../../workers/db.worker.js', import.meta.url),
+      { type: 'module' },
+    );
+    _api = wrap(_worker);
+  }
+  return _api;
+}
 
 class StorageService {
   constructor() {
-    this._db = null;
+    this._ready = false;
     this._initPromise = null;
   }
 
   /**
-   * Initialise the SQLite database. Safe to call multiple times (idempotent).
+   * Initialise the worker: generate the AES-GCM session key and open the
+   * OPFS SQLite database.  Safe to call multiple times — idempotent.
    */
   async init() {
-    if (this._db) return;
+    if (this._ready) return;
     if (this._initPromise) return this._initPromise;
 
-    this._initPromise = this._doInit();
+    this._initPromise = _getApi()
+      .init()
+      .then(() => { this._ready = true; })
+      .catch((err) => {
+        console.error('[storageService] Worker init failed:', err);
+        this._initPromise = null;
+      });
+
     return this._initPromise;
   }
 
-  async _doInit() {
-    try {
-      // Dynamically import to avoid blocking the main bundle parse.
-      const sqlite3InitModule = (await import('@sqlite.org/sqlite-wasm')).default;
+  /** true once the worker is ready to accept queries */
+  get isReady() { return this._ready; }
 
-      const sqlite3 = await sqlite3InitModule({
-        print: () => {},
-        printErr: console.error,
-      });
-
-      // Prefer OPFS for persistence; fall back to in-memory if OPFS is unavailable.
-      if (sqlite3.oo1?.OpfsDb) {
-        this._db = new sqlite3.oo1.OpfsDb(DB_NAME);
-        console.log('[storageService] Using OPFS-backed SQLite');
-      } else {
-        this._db = new sqlite3.oo1.DB(':memory:');
-        console.warn('[storageService] OPFS unavailable, using in-memory SQLite (non-persistent)');
-      }
-
-      this._createSchema();
-    } catch (err) {
-      console.error('[storageService] Failed to initialise SQLite:', err);
-      this._db = null;
-      this._initPromise = null;
-    }
-  }
-
-  _createSchema() {
-    this._db.exec(`
-      CREATE TABLE IF NOT EXISTS messages (
-        event_id    TEXT PRIMARY KEY,
-        room_id     TEXT NOT NULL,
-        sender      TEXT NOT NULL,
-        sender_name TEXT,
-        type        TEXT NOT NULL,
-        body        TEXT,
-        msgtype     TEXT,
-        timestamp   INTEGER NOT NULL,
-        is_outgoing INTEGER DEFAULT 0,
-        is_encrypted INTEGER DEFAULT 0,
-        call_type   TEXT,
-        call_outcome TEXT,
-        extra_json  TEXT
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_msg_room_ts
-        ON messages(room_id, timestamp);
-
-      CREATE INDEX IF NOT EXISTS idx_msg_sender
-        ON messages(sender);
-
-      -- FTS5 full-text search on message bodies
-      CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-        body,
-        event_id   UNINDEXED,
-        room_id    UNINDEXED,
-        content    = 'messages',
-        content_rowid = 'rowid'
-      );
-
-      -- Keep FTS in sync via triggers
-      CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
-        INSERT INTO messages_fts(rowid, body, event_id, room_id)
-          VALUES (new.rowid, new.body, new.event_id, new.room_id);
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
-        INSERT INTO messages_fts(messages_fts, rowid, body, event_id, room_id)
-          VALUES ('delete', old.rowid, old.body, old.event_id, old.room_id);
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
-        INSERT INTO messages_fts(messages_fts, rowid, body, event_id, room_id)
-          VALUES ('delete', old.rowid, old.body, old.event_id, old.room_id);
-        INSERT INTO messages_fts(rowid, body, event_id, room_id)
-          VALUES (new.rowid, new.body, new.event_id, new.room_id);
-      END;
-    `);
-  }
+  // ── Write ──────────────────────────────────────────────────────────────────
 
   /**
-   * Persist a normalised TimelineItem into SQLite.
-   * Silently skips items that cannot be persisted (e.g. 'system' items).
-   *
-   * @param {object} item – TimelineItem produced by timelineService.normalizeMatrixEvent
+   * Persist a TimelineItem.  Fire-and-forget is intentional — callers need
+   * not await writes.  Errors are surfaced to the console only.
    */
   saveEvent(item) {
-    if (!this._db) return;
-    if (!item || !item.eventId || !item.roomId) return;
-    if (item.type !== 'message' && item.type !== 'call') return;
-
-    // Never persist a pending-decryption placeholder.  The SDK fires
-    // Event.decrypted once it has a final result (success OR failure); we
-    // save at that point so only the real content ever hits the DB.
-    if (item.status === 'decrypting') return;
-
-    try {
-      // INSERT OR REPLACE overwrites any existing row for the same event_id.
-      // This is critical for E2EE messages: the first save might be a stale
-      // placeholder from a previous session; the decrypted version must win.
-      this._db.exec({
-        sql: `INSERT OR REPLACE INTO messages
-              (event_id, room_id, sender, sender_name, type, body, msgtype,
-               timestamp, is_outgoing, is_encrypted, call_type, call_outcome)
-              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        bind: [
-          item.eventId,
-          item.roomId,
-          item.sender || '',
-          item.senderName || '',
-          item.type,
-          item.body || '',
-          item.msgtype || null,
-          item.timestamp,
-          item.isOutgoing ? 1 : 0,
-          item.isEncrypted ? 1 : 0,
-          item.callType || null,
-          item.callOutcome || item.outcome || null,
-        ],
-      });
-    } catch (err) {
+    if (!this._ready) return Promise.resolve();
+    return _getApi().saveEvent(item).catch((err) => {
       console.error('[storageService] saveEvent error:', err);
-    }
-  }
-
-  /**
-   * Load paginated messages for a room, ordered oldest-first.
-   *
-   * @param {string} roomId
-   * @param {number} [limit]
-   * @param {number} [offset]
-   * @returns {object[]}
-   */
-  getMessages(roomId, limit = PAGE_SIZE, offset = 0) {
-    if (!this._db) return [];
-
-    const rows = [];
-    this._db.exec({
-      sql: `SELECT * FROM messages
-            WHERE room_id = ?
-            ORDER BY timestamp ASC
-            LIMIT ? OFFSET ?`,
-      bind: [roomId, limit, offset],
-      rowMode: 'object',
-      callback: (row) => rows.push(this._rowToItem(row)),
     });
-    return rows;
   }
 
+  /** Mark an event as redacted and remove its content from FTS. */
+  redactMessage(eventId) {
+    if (!this._ready) return;
+    _getApi().redactMessage(eventId).catch(console.error);
+  }
+
+  /** Replace a message body following a Matrix m.replace edit event. */
+  async updateMessageBody(eventId, newBody) {
+    if (!this._ready) return;
+    return _getApi().updateMessageBody(eventId, newBody);
+  }
+
+  // ── Read ───────────────────────────────────────────────────────────────────
+
   /**
-   * Return the total number of stored messages for a room.
+   * Load paginated messages for a room (oldest-first).
+   * Callers MUST await this — it crosses the worker boundary.
    */
-  countMessages(roomId) {
-    if (!this._db) return 0;
-    let count = 0;
-    this._db.exec({
-      sql: 'SELECT COUNT(*) as c FROM messages WHERE room_id = ?',
-      bind: [roomId],
-      rowMode: 'object',
-      callback: (row) => { count = row.c; },
-    });
-    return count;
+  async getMessages(roomId, limit = 50, offset = 0) {
+    if (!this._ready) return [];
+    return _getApi().getMessages(roomId, limit, offset);
   }
 
   /**
-   * Full-text search messages in a specific room.
+   * FTS5 full-text search — 100 % local, BM25-ranked, prefix-aware.
+   * Returns items with an extra `highlight` field containing the snippet.
+   */
+  async searchMessages(roomId, query, limit = 30) {
+    if (!this._ready) return [];
+    return _getApi().searchMessages(roomId, query, limit);
+  }
+
+  async countMessages(roomId) {
+    if (!this._ready) return 0;
+    return _getApi().countMessages(roomId);
+  }
+
+  // ── Sync state ─────────────────────────────────────────────────────────────
+
+  /** Persist the Matrix next_batch token in the DB (not localStorage). */
+  saveNextBatch(token) {
+    if (!this._ready) return;
+    _getApi().saveNextBatch(token).catch(console.error);
+  }
+
+  /** Retrieve the stored next_batch token. */
+  async getNextBatch() {
+    if (!this._ready) return null;
+    return _getApi().getNextBatch();
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  /**
+   * Wipe all rows (keeps the DB file and session key).
+   * Use on logout when also calling purge() or when you want a lighter reset.
+   */
+  async clearAll() {
+    if (!this._ready) return;
+    return _getApi().clearAll();
+  }
+
+  /**
+   * Full GDPR purge:
+   *  1. Destroy the AES-GCM session key (data unreadable immediately).
+   *  2. Close the SQLite connection.
+   *  3. Delete the OPFS file (including WAL / SHM).
    *
-   * @param {string} roomId
-   * @param {string} query
-   * @param {number} [limit]
-   * @returns {object[]}
+   * Called on logout, 30-min idle timeout, and remote wipe signal.
    */
-  searchMessages(roomId, query, limit = 30) {
-    if (!this._db || !query?.trim()) return [];
-
-    const rows = [];
+  async purge() {
+    if (!this._ready && !_api) return;
+    this._ready = false;
     try {
-      this._db.exec({
-        sql: `SELECT m.* FROM messages m
-              JOIN messages_fts f ON m.rowid = f.rowid
-              WHERE f.messages_fts MATCH ?
-                AND m.room_id = ?
-              ORDER BY m.timestamp DESC
-              LIMIT ?`,
-        bind: [query.trim(), roomId, limit],
-        rowMode: 'object',
-        callback: (row) => rows.push(this._rowToItem(row)),
-      });
+      await _getApi().purge();
     } catch (err) {
-      console.error('[storageService] searchMessages error:', err);
+      console.warn('[storageService] purge error:', err);
     }
-    return rows;
-  }
-
-  /**
-   * Delete all stored messages. Called on logout for GDPR compliance.
-   */
-  clearAll() {
-    if (!this._db) return;
-    try {
-      this._db.exec(`
-        DELETE FROM messages_fts;
-        DELETE FROM messages;
-      `);
-    } catch (err) {
-      console.error('[storageService] clearAll error:', err);
+    // Tear down the worker itself after purge
+    if (_worker) {
+      _worker.terminate();
+      _worker = null;
+      _api = null;
     }
+    this._initPromise = null;
   }
 
-  /** Convert a SQLite row object back into a TimelineItem. */
-  _rowToItem(row) {
-    return {
-      type: row.type,
-      eventId: row.event_id,
-      roomId: row.room_id,
-      sender: row.sender,
-      senderName: row.sender_name,
-      body: row.body,
-      msgtype: row.msgtype,
-      timestamp: row.timestamp,
-      isOutgoing: !!row.is_outgoing,
-      isEncrypted: !!row.is_encrypted,
-      callType: row.call_type,
-      outcome: row.call_outcome,
-      status: 'delivered',
-    };
-  }
-
-  get isReady() {
-    return !!this._db;
+  /** Destroy the session key only — in-memory wipe without touching the file. */
+  destroySessionKey() {
+    if (!this._ready) return;
+    _getApi().destroySessionKey().catch(console.error);
   }
 }
 

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { Spin, Typography, Empty } from 'antd';
-import { LockOutlined } from '@ant-design/icons';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { Spin, Typography, Empty, Input } from 'antd';
+import { LockOutlined, SearchOutlined, CloseOutlined } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
+import { storageService } from '../../utils/storageService';
 import { selectActiveRoomId } from '../../../../store/chatSlice';
 import { useChat } from '../../hooks/useChat';
 import { useTimeline } from '../../hooks/useTimeline';
@@ -55,9 +56,9 @@ function isSameDay(ts1, ts2) {
  * shows a full-screen RoomInviteGate with Accept/Decline.  The message input
  * and call buttons are hidden until the user accepts and membership becomes 'join'.
  *
- * @param {{ onPlaceCall: (roomId: string, isVideo: boolean) => void, isReady: boolean }} props
+ * @param {{ onPlaceCall: (roomId: string, isVideo: boolean) => void, isReady: boolean, msgSearchOpen: boolean, onCloseSearch: () => void }} props
  */
-export default function ChatPanel({ onPlaceCall, isReady }) {
+export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onCloseSearch }) {
   const roomId = useSelector(selectActiveRoomId);
   const membership = useRoomMembership(roomId);
 
@@ -67,6 +68,46 @@ export default function ChatPanel({ onPlaceCall, isReady }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   const prevScrollHeightRef = useRef(0);
+  const searchDebounceRef = useRef(null);
+
+  // ── Message search state ───────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Clear search state whenever the panel is closed or room changes
+  useEffect(() => {
+    if (!msgSearchOpen) {
+      setSearchQuery('');
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [msgSearchOpen, roomId]);
+
+  const handleSearchChange = useCallback((e) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    if (!q.trim() || q.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await storageService.searchMessages(roomId, q.trim());
+        setSearchResults(results || []);
+      } catch (err) {
+        console.error('[ChatPanel] searchMessages error:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, [roomId]);
 
   const isEncrypted = roomId ? roomService.isRoomEncrypted(roomId) : false;
 
@@ -156,66 +197,120 @@ export default function ChatPanel({ onPlaceCall, isReady }) {
         </div>
       )}
 
-      {/* Message list */}
-      <div
-        className={styles.messageList}
-        ref={containerRef}
-        onScroll={handleScroll}
-      >
-        {isLoading && (
-          <div className={styles.loadingSpinner}>
-            <Spin size="small" />
-          </div>
-        )}
+      {/* ── Message search bar ──────────────────────────────────────────── */}
+      {msgSearchOpen && (
+        <div className={styles.searchBar}>
+          <Input
+            autoFocus
+            prefix={<SearchOutlined style={{ color: '#8696a0' }} />}
+            suffix={
+              isSearching
+                ? <Spin size="small" />
+                : <CloseOutlined style={{ color: '#8696a0', cursor: 'pointer' }} onClick={onCloseSearch} />
+            }
+            placeholder="Search messages in this chat…"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className={styles.searchInput}
+          />
+          {searchQuery.trim().length >= 2 && !isSearching && (
+            <div className={styles.searchMeta}>
+              {searchResults.length === 0
+                ? 'No messages found'
+                : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}`}
+            </div>
+          )}
+        </div>
+      )}
 
-        {timeline.length === 0 && !isLoading && (
-          <div className={styles.noMessages}>
-            <LockOutlined style={{ fontSize: 28, marginBottom: 8, color: '#8696a0' }} />
-            <Text style={{ color: '#8696a0' }}>
-              {isEncrypted
-                ? 'This is an end-to-end encrypted conversation.'
-                : 'Start the conversation.'}
-            </Text>
-          </div>
-        )}
+      {/* ── Search results / normal timeline (mutually exclusive) ─────────── */}
+      {msgSearchOpen && searchQuery.trim().length >= 2 ? (
+        <div className={styles.searchResults}>
+          {searchResults.length === 0 && !isSearching && (
+            <div className={styles.noMessages}>
+              <SearchOutlined style={{ fontSize: 28, marginBottom: 8, color: '#8696a0' }} />
+              <Text style={{ color: '#8696a0' }}>No messages match your search</Text>
+            </div>
+          )}
+          {searchResults.map((item) => (
+            <div key={item.eventId} className={styles.searchResultItem}>
+              <div className={styles.searchResultMeta}>
+                <span className={styles.searchResultSender}>{item.senderName || item.sender}</span>
+                <span className={styles.searchResultTime}>
+                  {new Date(item.timestamp).toLocaleString([], {
+                    month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </div>
+              <div
+                className={styles.searchResultBody}
+                dangerouslySetInnerHTML={{ __html: item.highlight || item.body }}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          className={styles.messageList}
+          ref={containerRef}
+          onScroll={handleScroll}
+        >
+          {isLoading && (
+            <div className={styles.loadingSpinner}>
+              <Spin size="small" />
+            </div>
+          )}
 
-        {timeline.map((item, idx) => {
-          const prevItem = idx > 0 ? timeline[idx - 1] : null;
-          const showDateDivider =
-            !prevItem || !isSameDay(prevItem.timestamp, item.timestamp);
-          const showSenderName =
-            !prevItem ||
-            prevItem.type !== 'message' ||
-            prevItem.sender !== item.sender;
+          {timeline.length === 0 && !isLoading && (
+            <div className={styles.noMessages}>
+              <LockOutlined style={{ fontSize: 28, marginBottom: 8, color: '#8696a0' }} />
+              <Text style={{ color: '#8696a0' }}>
+                {isEncrypted
+                  ? 'This is an end-to-end encrypted conversation.'
+                  : 'Start the conversation.'}
+              </Text>
+            </div>
+          )}
 
-          return (
-            <React.Fragment key={item.eventId}>
-              {showDateDivider && <DateDivider timestamp={item.timestamp} />}
+          {timeline.map((item, idx) => {
+            const prevItem = idx > 0 ? timeline[idx - 1] : null;
+            const showDateDivider =
+              !prevItem || !isSameDay(prevItem.timestamp, item.timestamp);
+            const showSenderName =
+              !prevItem ||
+              prevItem.type !== 'message' ||
+              prevItem.sender !== item.sender;
 
-              {item.type === 'message' && (
-                <MessageBubble item={item} showSenderName={showSenderName} />
-              )}
+            return (
+              <React.Fragment key={item.eventId}>
+                {showDateDivider && <DateDivider timestamp={item.timestamp} />}
 
-              {item.type === 'call' && (
-                <CallHistoryItem
-                  item={item}
-                  onCallBack={
-                    onPlaceCall
-                      ? () => onPlaceCall(roomId, item.callType === 'video')
-                      : null
-                  }
-                />
-              )}
+                {item.type === 'message' && (
+                  <MessageBubble item={item} showSenderName={showSenderName} />
+                )}
 
-              {item.type === 'invite' && <InviteItem item={item} />}
+                {item.type === 'call' && (
+                  <CallHistoryItem
+                    item={item}
+                    onCallBack={
+                      onPlaceCall
+                        ? () => onPlaceCall(roomId, item.callType === 'video')
+                        : null
+                    }
+                  />
+                )}
 
-              {item.type === 'system' && <SystemMessage text={item.text} />}
-            </React.Fragment>
-          );
-        })}
+                {item.type === 'invite' && <InviteItem item={item} />}
 
-        <div ref={bottomRef} />
-      </div>
+                {item.type === 'system' && <SystemMessage text={item.text} />}
+              </React.Fragment>
+            );
+          })}
+
+          <div ref={bottomRef} />
+        </div>
+      )}
 
       {/* Message input – only shown when actually joined */}
       <MessageInput

@@ -79,6 +79,7 @@ export default function ChatLayout({ onLogout }) {
 
   const [isReady, setIsReady] = useState(matrixManager.isReady);
   const [dialerNotice, setDialerNotice] = useState('');
+  const [msgSearchOpen, setMsgSearchOpen] = useState(false);
 
   const {
     incomingCall,
@@ -113,6 +114,7 @@ export default function ChatLayout({ onLogout }) {
   const handleSelectRoom = (roomId) => {
     dispatch(setActiveRoom(roomId));
     setDialerNotice('');
+    setMsgSearchOpen(false);
   };
 
   const handleCall = async (isVideo = true) => {
@@ -242,8 +244,8 @@ export default function ChatLayout({ onLogout }) {
                         <Button
                           type="text"
                           icon={<SearchOutlined />}
-                          className={styles.callBtn}
-                          disabled
+                          className={`${styles.callBtn} ${msgSearchOpen ? styles.callBtnActive : ''}`}
+                          onClick={() => setMsgSearchOpen((v) => !v)}
                         />
                       </Tooltip>
                     </Space>
@@ -255,6 +257,8 @@ export default function ChatLayout({ onLogout }) {
                   <ChatPanel
                     isReady={isReady}
                     onPlaceCall={handlePlaceCallFromTimeline}
+                    msgSearchOpen={msgSearchOpen}
+                    onCloseSearch={() => setMsgSearchOpen(false)}
                   />
 
                   {callMode === 'pip' && (activeCall || incomingCall) && (

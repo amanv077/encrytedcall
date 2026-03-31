@@ -34,6 +34,26 @@ class ChatService {
     this._timelineHandler = (event, room, toStartOfTimeline) => {
       // Skip historical events loaded during initial sync
       if (toStartOfTimeline) return;
+
+      const type = event.getType();
+
+      // Handle redactions: remove the target event from local storage
+      if (type === 'm.room.redaction') {
+        const redacts = event.event?.redacts || event.getAssociatedId?.();
+        if (redacts) storageService.redactMessage(redacts);
+        return;
+      }
+
+      // Handle edits (m.replace relationship): update the body in local storage
+      if (type === 'm.room.message') {
+        const rel = event.getContent()?.['m.relates_to'];
+        if (rel?.rel_type === 'm.replace' && rel.event_id) {
+          const newBody = event.getContent()?.['m.new_content']?.body;
+          if (newBody) storageService.updateMessageBody(rel.event_id, newBody);
+          return;
+        }
+      }
+
       this._handleEvent(event, false);
     };
 

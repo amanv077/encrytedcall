@@ -126,30 +126,71 @@ class RoomService {
   }
 
   /**
-   * Search users via the homeserver user-directory.
+   * Search users on the homeserver.
    *
-   * @param {string} term – partial display name or user ID
+   * Two-pronged strategy:
+   *  1. If the term looks like a full Matrix ID (@user:server), call
+   *     getProfileInfo() directly — this works even when the Synapse user
+   *     directory is restricted to "shared room" members only.
+   *  2. Always also run searchUserDirectory() so partial-name matches are
+   *     included when the directory does return results.
+   *
+   * Results are deduplicated and the current user is excluded.
+   *
+   * @param {string} term – partial display name or Matrix user ID
    * @param {number} [limit=20]
    * @returns {Promise<Array<{ userId: string, displayName: string, avatarUrl: string|null }>>}
    */
   async searchUsers(term, limit = 20) {
     const client = matrixManager.getClient();
     if (!client) return [];
-    if (!term || term.trim().length < 2) return [];
+    const trimmed = (term || '').trim();
+    if (trimmed.length < 2) return [];
 
-    try {
-      const res = await client.searchUserDirectory({ term: term.trim(), limit });
-      return (res.results || []).map((u) => ({
-        userId: u.user_id,
-        displayName: u.display_name || u.user_id,
-        avatarUrl: u.avatar_url
-          ? client.mxcUrlToHttp(u.avatar_url, 40, 40, 'crop')
-          : null,
-      }));
-    } catch (err) {
-      console.error('User directory search failed:', err);
-      return [];
+    const myUserId = client.getUserId();
+    const seen = new Set();
+    const results = [];
+
+    const push = (userId, displayName, avatarUrl) => {
+      if (!userId || userId === myUserId || seen.has(userId)) return;
+      seen.add(userId);
+      results.push({ userId, displayName: displayName || userId, avatarUrl: avatarUrl || null });
+    };
+
+    // ── 1. Direct profile lookup for full Matrix IDs ──────────────────────
+    // Synapse user directory only returns users who share a room with you by
+    // default. Typing a full @user:server always resolves via profile API.
+    const isFullId = /^@[^:]+:.+/.test(trimmed);
+    if (isFullId) {
+      try {
+        const profile = await client.getProfileInfo(trimmed);
+        push(
+          trimmed,
+          profile.displayname,
+          profile.avatar_url
+            ? client.mxcUrlToHttp(profile.avatar_url, 40, 40, 'crop')
+            : null,
+        );
+      } catch {
+        // User not found or homeserver unreachable — silently skip
+      }
     }
+
+    // ── 2. Homeserver user-directory search (partial names, etc.) ─────────
+    try {
+      const res = await client.searchUserDirectory({ term: trimmed, limit });
+      for (const u of res.results || []) {
+        push(
+          u.user_id,
+          u.display_name,
+          u.avatar_url ? client.mxcUrlToHttp(u.avatar_url, 40, 40, 'crop') : null,
+        );
+      }
+    } catch (err) {
+      console.error('[roomService] searchUserDirectory failed:', err);
+    }
+
+    return results;
   }
 
   /**

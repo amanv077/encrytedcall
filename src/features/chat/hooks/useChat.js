@@ -58,9 +58,9 @@ export function useChat(roomId) {
     const loadInitial = async () => {
       dispatch(setLoading({ roomId, loading: true }));
 
-      // 1. Try local SQLite first (fast)
+      // 1. Try local SQLite first (fast) — must await, worker is async
       let items = storageService.isReady
-        ? storageService.getMessages(roomId, PAGE_SIZE, 0)
+        ? await storageService.getMessages(roomId, PAGE_SIZE, 0)
         : [];
 
       // 2. If SQLite has nothing, hydrate from the Matrix SDK's in-memory timeline
@@ -163,9 +163,9 @@ export function useChat(roomId) {
 
     const offset = loadedCountRef.current;
 
-    // Try SQLite first
+    // Try SQLite first — must await, worker is async
     let older = storageService.isReady
-      ? storageService.getMessages(roomId, PAGE_SIZE, offset)
+      ? await storageService.getMessages(roomId, PAGE_SIZE, offset)
       : [];
 
     // If SQLite doesn't have older messages, fetch from homeserver
