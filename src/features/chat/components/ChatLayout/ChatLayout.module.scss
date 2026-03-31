@@ -162,6 +162,18 @@
   &:hover { color: $primary !important; background: $primary-light !important; }
 }
 
+.topBarAvatar {
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &:hover { box-shadow: 0 0 0 2px $primary-medium; }
+}
+
+.topBarAvatarActive {
+  border-color: $primary !important;
+  box-shadow: 0 0 0 2px $primary-light;
+}
+
 // ── Body row ──────────────────────────────────────────────────────────────────
 
 .bodyRow {
@@ -235,6 +247,7 @@
   gap: 10px;
   overflow: hidden;
 }
+
 
 .headerName {
   font-size: 15px;

@@ -98,9 +98,10 @@ export default function ChatLayout({ onLogout }) {
   const callMode       = useSelector(selectCallMode);
   const userSearchOpen = useSelector(selectUserSearchOpen);
 
-  const [isReady, setIsReady]           = useState(matrixManager.isReady);
-  const [dialerNotice, setDialerNotice] = useState('');
+  const [isReady, setIsReady]             = useState(matrixManager.isReady);
+  const [dialerNotice, setDialerNotice]   = useState('');
   const [msgSearchOpen, setMsgSearchOpen] = useState(false);
+  const [contactOpen, setContactOpen]     = useState(false);
 
   const {
     incomingCall, activeCall, callState,
@@ -122,6 +123,7 @@ export default function ChatLayout({ onLogout }) {
     dispatch(setActiveRoom(roomId));
     setDialerNotice('');
     setMsgSearchOpen(false);
+    setContactOpen(false);
   };
 
   const handleCall = async (isVideo = true) => {
@@ -199,12 +201,15 @@ export default function ChatLayout({ onLogout }) {
             <Tooltip title="Notifications">
               <Button type="text" icon={<BellOutlined />} className={styles.topBarBtn} />
             </Tooltip>
-            <Avatar
-              src={client?.getUser(myUserId)?.avatarUrl || undefined}
-              icon={<UserOutlined />}
-              size={32}
-              style={{ cursor: 'pointer', border: '2px solid #006d6a' }}
-            />
+            <Tooltip title={contactOpen ? 'Hide my profile' : 'My profile'}>
+              <Avatar
+                src={client?.getUser(myUserId)?.avatarUrl || undefined}
+                icon={<UserOutlined />}
+                size={32}
+                onClick={() => setContactOpen((v) => !v)}
+                className={`${styles.topBarAvatar} ${contactOpen ? styles.topBarAvatarActive : ''}`}
+              />
+            </Tooltip>
           </div>
         </div>
 
@@ -332,8 +337,11 @@ export default function ChatLayout({ onLogout }) {
             )}
           </div>
 
-          {/* Right contact panel – always rendered, shows placeholder when no room selected */}
-          <ContactPanel roomId={activeRoomId} />
+          {/* My profile panel – always in DOM, slides in/out via CSS */}
+          <ContactPanel
+            open={contactOpen}
+            onClose={() => setContactOpen(false)}
+          />
         </div>
       </div>
 

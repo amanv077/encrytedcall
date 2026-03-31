@@ -20,14 +20,9 @@ const ACTION_CHIPS = [
   { icon: <AppstoreOutlined />,  label: 'Interactive' },
 ];
 
-/**
- * MessageInput – compose + send, with action chip tray above.
- *
- * @param {{ onSend, disabled, isEncrypted }} props
- */
 export default function MessageInput({ onSend, disabled = false, isEncrypted = false }) {
-  const [text, setText]   = useState('');
-  const textareaRef       = useRef(null);
+  const [text, setText] = useState('');
+  const textareaRef     = useRef(null);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -49,7 +44,8 @@ export default function MessageInput({ onSend, disabled = false, isEncrypted = f
 
   return (
     <div className={styles.inputArea}>
-      {/* Action chips row */}
+
+      {/* ── Action chips ──────────────────────────────────────────────── */}
       <div className={styles.chipsRow}>
         {ACTION_CHIPS.map(({ icon, label }) => (
           <Tooltip key={label} title={label}>
@@ -61,20 +57,26 @@ export default function MessageInput({ onSend, disabled = false, isEncrypted = f
         ))}
       </div>
 
-      {/* Composer row */}
+      {/* ── Compose pill: paperclip | textarea | mic/send ─────────────── */}
       <div className={styles.composerRow}>
-        <Tooltip title="Attach file">
-          <button className={styles.iconBtn} disabled={disabled}>
-            <PaperClipOutlined />
-          </button>
-        </Tooltip>
+        {/* The whole pill */}
+        <div className={`${styles.composerPill} ${disabled ? styles.composerPillDisabled : ''}`}>
 
-        <div className={styles.inputWrapper}>
+          {/* Left icon – attachment */}
+          <Tooltip title="Attach file">
+            <button className={styles.pillBtn} disabled={disabled} tabIndex={-1}>
+              <PaperClipOutlined />
+            </button>
+          </Tooltip>
+
+          {/* Encryption indicator (only when E2E) */}
           {isEncrypted && (
             <Tooltip title="End-to-end encrypted">
               <LockOutlined className={styles.lockIcon} />
             </Tooltip>
           )}
+
+          {/* Text area */}
           <textarea
             ref={textareaRef}
             className={styles.textarea}
@@ -85,24 +87,26 @@ export default function MessageInput({ onSend, disabled = false, isEncrypted = f
             disabled={disabled}
             rows={1}
           />
-        </div>
 
-        {text.trim() ? (
-          <button
-            className={`${styles.iconBtn} ${styles.sendBtn}`}
-            onClick={handleSend}
-            disabled={disabled}
-          >
-            <SendOutlined />
-          </button>
-        ) : (
-          <Tooltip title="Voice message">
-            <button className={styles.iconBtn} disabled={disabled}>
-              <AudioOutlined />
+          {/* Right icon – send when text present, mic otherwise */}
+          {text.trim() ? (
+            <button
+              className={`${styles.pillBtn} ${styles.pillBtnSend}`}
+              onClick={handleSend}
+              disabled={disabled}
+            >
+              <SendOutlined />
             </button>
-          </Tooltip>
-        )}
+          ) : (
+            <Tooltip title="Voice message">
+              <button className={styles.pillBtn} disabled={disabled} tabIndex={-1}>
+                <AudioOutlined />
+              </button>
+            </Tooltip>
+          )}
+        </div>
       </div>
+
     </div>
   );
 }
