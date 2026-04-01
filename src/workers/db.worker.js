@@ -66,6 +66,7 @@ function _destroySessionKey() {
 
 // ── SQLite database (OPFS-backed, worker-only) ───────────────────────────────
 const DB_FILENAME = 'synapp-local.db';
+const DB_URI = 'file:synapp-local.db?vfs=opfs';
 let db = null;
 
 async function _initDb() {
@@ -74,7 +75,7 @@ async function _initDb() {
 
   if (sqlite3.oo1?.OpfsDb) {
     // OPFS sync-access-handle VFS — persistent, origin-isolated, worker-only
-    db = new sqlite3.oo1.OpfsDb(DB_FILENAME);
+    db = new sqlite3.oo1.OpfsDb(DB_URI);
     console.log('[db.worker] OPFS-backed SQLite ready');
   } else {
     db = new sqlite3.oo1.DB(':memory:');
@@ -186,6 +187,32 @@ function _createSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_votes_poll
       ON votes(poll_id);
+
+    -- ── Quiz persistence (MVP) ────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS quizzes (
+      quiz_id            TEXT PRIMARY KEY,
+      room_id            TEXT NOT NULL,
+      question           TEXT NOT NULL,
+      options_json       TEXT NOT NULL,
+      correct_option_id  TEXT NOT NULL,
+      created_by         TEXT NOT NULL,
+      created_at         INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS quiz_answers (
+      quiz_id            TEXT NOT NULL,
+      user_id            TEXT NOT NULL,
+      selected_option_id TEXT NOT NULL,
+      updated_at         INTEGER NOT NULL,
+      PRIMARY KEY (quiz_id, user_id),
+      FOREIGN KEY (quiz_id) REFERENCES quizzes(quiz_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_quizzes_room_created
+      ON quizzes(room_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_quiz_answers_quiz
+      ON quiz_answers(quiz_id);
 
     -- ── Media cache (AES-CTR key itself AES-GCM encrypted) ───────────────
     CREATE TABLE IF NOT EXISTS media_cache (
@@ -324,6 +351,82 @@ const api = {
       userId: row.user_id,
       answerId: row.answer_id,
       timestamp: row.updated_at,
+    }));
+  },
+
+  saveQuiz(quiz) {
+    if (!db || !quiz?.quizId || !quiz?.roomId || !quiz?.question) return;
+    db.exec({
+      sql: `INSERT OR REPLACE INTO quizzes
+            (quiz_id, room_id, question, options_json, correct_option_id, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      bind: [
+        quiz.quizId,
+        quiz.roomId,
+        quiz.question,
+        JSON.stringify(quiz.options || []),
+        quiz.correctOptionId || '',
+        quiz.createdBy || quiz.sender || '',
+        quiz.createdAt || Date.now(),
+      ],
+    });
+  },
+
+  saveQuizAnswer(answer) {
+    if (!db || !answer?.quizId || !answer?.userId || !answer?.selectedOptionId) return;
+    db.exec({
+      sql: `INSERT OR REPLACE INTO quiz_answers
+            (quiz_id, user_id, selected_option_id, updated_at)
+            VALUES (?, ?, ?, ?)`,
+      bind: [
+        answer.quizId,
+        answer.userId,
+        answer.selectedOptionId,
+        answer.updatedAt || Date.now(),
+      ],
+    });
+  },
+
+  getQuizzesByRoom(roomId) {
+    if (!db || !roomId) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT quiz_id, room_id, question, options_json, correct_option_id, created_by, created_at
+            FROM quizzes
+            WHERE room_id = ?
+            ORDER BY created_at ASC`,
+      bind: [roomId],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    return rows.map((row) => ({
+      quizId: row.quiz_id,
+      roomId: row.room_id,
+      question: row.question,
+      options: JSON.parse(row.options_json || '[]'),
+      correctOptionId: row.correct_option_id,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+    }));
+  },
+
+  getQuizAnswersByRoom(roomId) {
+    if (!db || !roomId) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT qa.quiz_id, qa.user_id, qa.selected_option_id, qa.updated_at
+            FROM quiz_answers qa
+            JOIN quizzes q ON q.quiz_id = qa.quiz_id
+            WHERE q.room_id = ?`,
+      bind: [roomId],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    return rows.map((row) => ({
+      quizId: row.quiz_id,
+      userId: row.user_id,
+      selectedOptionId: row.selected_option_id,
+      updatedAt: row.updated_at,
     }));
   },
 
@@ -544,6 +647,8 @@ const api = {
         DELETE FROM media_cache;
         DELETE FROM votes;
         DELETE FROM polls;
+        DELETE FROM quiz_answers;
+        DELETE FROM quizzes;
         DELETE FROM sync_state;
         DELETE FROM messages;
       `);
