@@ -1,34 +1,102 @@
 @import '../../../../shared/styles/variables';
 
-.modalBody {
+.modal {
+  :global(.ant-modal) {
+    width: min(360px, calc(100vw - 24px)) !important;
+  }
+
+  :global(.ant-modal-content) {
+    background: $bg-white;
+    border: 1px solid $border;
+  }
+}
+
+.body {
+  padding: 24px 22px 22px;
   text-align: center;
-  padding: 24px 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 18px;
+}
+
+.avatar {
+  background: $primary-light;
+  color: $primary;
+  border: 2px solid $primary-light;
+}
+
+.callType {
+  color: $text-muted;
+  font-size: 12px;
+  margin-top: 6px;
 }
 
 .title {
-  color: $text-primary;
-  margin: 0;
+  margin: 0 !important;
+  color: $text-primary !important;
+  font-weight: 700 !important;
+  font-size: 22px !important;
+  line-height: 1.2 !important;
 }
 
-.callerId {
+.callerName {
   color: $text-secondary;
-  display: block;
-  margin-bottom: 32px;
+  font-size: 12px;
 }
 
-.btnGroup { justify-content: center; }
+.btnGroup {
+  width: 100%;
+  max-width: 240px;
+  justify-content: space-between;
+  margin: 8px auto 0;
+}
+
+.btnCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.btnLabel {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.btnAccept,
+.btnReject {
+  width: 64px !important;
+  min-width: 64px !important;
+  height: 64px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  font-size: 22px !important;
+  border: none !important;
+  box-shadow: $shadow-sm;
+
+  :global(.anticon) {
+    line-height: 1 !important;
+    font-size: 22px;
+  }
+}
 
 .btnAccept {
-  width: 64px;
-  height: 64px;
-  font-size: 24px;
-  background: $primary !important;
-  border-color: $primary !important;
-  &:hover { background: $primary-hover !important; border-color: $primary-hover !important; }
+  background: $success !important;
+  color: #fff !important;
+  &:hover { background: darken($success, 6%) !important; }
 }
 
 .btnReject {
-  width: 64px;
-  height: 64px;
-  font-size: 24px;
+  background: $danger !important;
+  color: #fff !important;
+  &:hover { background: darken($danger, 6%) !important; }
 }

@@ -4,14 +4,48 @@
   :global(.ant-modal-title) { color: $text-primary !important; }
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  color: $text-primary;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 12.5px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.closeBtn {
+  color: $text-secondary !important;
+  &:hover { color: $primary !important; background: $primary-light !important; }
+}
+
+.body {
+  padding: 12px 0 0;
+}
+
 .searchRow {
   padding: 0 16px 12px;
 }
 
 .searchInput {
+  background: $bg-app !important;
+  border: 1px solid $border !important;
   border-radius: 20px !important;
+  height: 40px;
 
-  input {
+  :global(.ant-input) {
+    background: $bg-app !important;
+    font-size: 13px;
     color: $text-primary !important;
     &::placeholder { color: $text-muted !important; }
   }
@@ -39,4 +73,20 @@
   cursor: pointer;
   transition: background 0.15s;
   &:hover { background: $bg-hover; }
+}
+
+.resultAvatar {
+  background: $primary !important;
+  color: #fff !important;
+}
+
+.resultTitle {
+  color: $text-primary;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.resultSub {
+  color: $text-muted;
+  font-size: 12px;
 }
