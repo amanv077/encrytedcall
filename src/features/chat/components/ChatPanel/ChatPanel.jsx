@@ -53,6 +53,20 @@ function isSameDay(ts1, ts2) {
 }
 
 /**
+ * Wrap every occurrence of `term` inside `text` with <mark>…</mark> tags,
+ * case-insensitively.  Returns the original text when there is no match.
+ */
+function _highlightTerm(text, term) {
+  if (!text || !term) return text || '';
+  try {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(new RegExp(escaped, 'gi'), (match) => `<mark>${match}</mark>`);
+  } catch {
+    return text;
+  }
+}
+
+/**
  * ChatPanel – the main conversation view.
  *
  * Invite gate: when the selected room has membership='invite', this component
@@ -100,19 +114,38 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       return;
     }
 
+    // ── Phase 1: instant in-memory search ────────────────────────────────────
+    // The `timeline` array already holds the decrypted messages currently
+    // displayed in Redux.  Filter it immediately so results appear with zero
+    // latency regardless of whether the FTS index has been populated yet.
+    const lower = q.trim().toLowerCase();
+    const inMemoryResults = timeline
+      .filter((item) => item.type === 'message' && item.body && item.body.toLowerCase().includes(lower))
+      .map((item) => ({
+        ...item,
+        highlight: _highlightTerm(item.body, q.trim()),
+      }))
+      .reverse(); // most-recent first for search results
+    setSearchResults(inMemoryResults);
+
+    // ── Phase 2: FTS5 search in SQLite (debounced) ───────────────────────────
+    // Supplements with older messages that are stored in the DB but not in the
+    // current Redux window.  Results are merged, deduplicating by eventId.
     setIsSearching(true);
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        const results = await storageService.searchMessages(roomId, q.trim());
-        setSearchResults(results || []);
+        const ftsResults = await storageService.searchMessages(roomId, q.trim());
+        const inMemoryIds = new Set(inMemoryResults.map((r) => r.eventId));
+        const extra = (ftsResults || []).filter((r) => !inMemoryIds.has(r.eventId));
+        setSearchResults([...inMemoryResults, ...extra]);
       } catch (err) {
         console.error('[ChatPanel] searchMessages error:', err);
-        setSearchResults([]);
+        // Keep the in-memory results even if FTS fails
       } finally {
         setIsSearching(false);
       }
     }, 300);
-  }, [roomId]);
+  }, [roomId, timeline]);
 
   const isEncrypted = roomId ? roomService.isRoomEncrypted(roomId) : false;
 

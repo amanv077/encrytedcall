@@ -3,7 +3,7 @@
 // ── Outer container ───────────────────────────────────────────────────────────
 
 .inputArea {
-  background: $bg-white;
+  background: #ffffff;          // explicit white — never inherit chat-panel gray
   border-top: 1px solid $border;
   flex-shrink: 0;
 }
@@ -14,9 +14,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px 6px;
+  padding: 8px 16px 8px;
+  background: #ffffff;          // explicit — prevents $bg-chat bleed-through
   overflow-x: auto;
-  border-bottom: 1px solid $border-light;
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
@@ -26,7 +26,7 @@
   align-items: center;
   gap: 5px;
   padding: 5px 13px;
-  background: $bg-white;
+  background: #ffffff;          // solid white chip face
   border: 1px solid $border;
   border-radius: 20px;
   cursor: pointer;
@@ -48,31 +48,54 @@
 
 .chipLabel { font-size: 12.5px; }
 
-// ── Composer row ──────────────────────────────────────────────────────────────
+// ── Composer row wrapper ──────────────────────────────────────────────────────
 
 .composerRow {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px 10px;
-  gap: 4px;
+  padding: 4px 14px 10px;
+  background: #ffffff;
 }
 
-// Round icon button (paperclip, mic, send)
-.iconBtn {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
+// ── The pill itself: rounded border, holds all three elements ─────────────────
+
+.composerPill {
+  display: flex;
+  align-items: center;
+  border: 1px solid $border;
+  border-radius: 24px;
+  background: $bg-white;
+  padding: 0 4px;
+  min-height: 44px;
+  gap: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:focus-within {
+    border-color: $primary;
+    box-shadow: 0 0 0 3px rgba(0, 109, 106, 0.08);
+  }
+}
+
+.composerPillDisabled {
+  background: $bg-app;
+  opacity: 0.7;
+}
+
+// ── Icon buttons inside the pill ──────────────────────────────────────────────
+
+.pillBtn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
   border: none;
   background: transparent;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
-  color: $text-secondary;
+  font-size: 16px;
+  color: $text-muted;
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s;
   padding: 0;
 
   &:hover:not(:disabled) {
@@ -83,7 +106,7 @@
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
-.sendBtn {
+.pillBtnSend {
   background: $primary !important;
   color: #fff !important;
 
@@ -93,23 +116,16 @@
   }
 }
 
-// ── Text input field ──────────────────────────────────────────────────────────
-
-.inputWrapper {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  // No border — flat look like the reference image
-  padding: 0 8px;
-  min-height: 38px;
-}
+// ── Lock icon ─────────────────────────────────────────────────────────────────
 
 .lockIcon {
   color: $text-muted;
   font-size: 12px;
   flex-shrink: 0;
+  margin-left: 2px;
 }
+
+// ── Textarea ──────────────────────────────────────────────────────────────────
 
 .textarea {
   flex: 1;
@@ -118,15 +134,16 @@
   outline: none;
   resize: none;
   color: $text-primary;
-  font-size: 14.5px;
+  font-size: 14px;
   line-height: 22px;
-  padding: 6px 0;
+  padding: 10px 6px;
   font-family: inherit;
   max-height: 120px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: $border transparent;
+  min-width: 0;
 
   &::placeholder { color: $text-muted; }
-  &:disabled { cursor: not-allowed; opacity: 0.5; }
+  &:disabled { cursor: not-allowed; }
 }

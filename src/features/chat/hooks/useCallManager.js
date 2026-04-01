@@ -212,18 +212,37 @@ export function useCallManager() {
       probeStream.getTracks().forEach((t) => t.stop());
 
       if (!canVideo) {
-        // hasRemoteUserMediaVideoTrack is a getter-only property on MatrixCall,
-        // so direct assignment throws. Override it on this instance so that
-        // shouldAnswerWithMediaType() stops forcing video=true in its retry loop
-        // and allows the call to be answered audio-only.
-        Object.defineProperty(call, 'hasRemoteUserMediaVideoTrack', {
-          get: () => false,
-          configurable: true,
-        });
+        // Two-layer guard so the SDK never enters its video-retry loop:
+        //
+        // 1. Override the `hasRemoteUserMediaVideoTrack` getter on this instance
+        //    so the SDK thinks the remote side has no video track either.
+        try {
+          Object.defineProperty(call, 'hasRemoteUserMediaVideoTrack', {
+            get: () => false,
+            configurable: true,
+          });
+        } catch (_) { /* non-configurable on this SDK version – fall through */ }
+
+        // 2. Directly replace `shouldAnswerWithMediaType` on the instance.
+        //    This is a regular method (not a getter) so simple property
+        //    assignment works and definitely shadows the prototype version.
+        //    When the SDK asks "should I answer with video?", we say no.
+        const _origShouldAnswer = call.shouldAnswerWithMediaType?.bind(call);
+        call.shouldAnswerWithMediaType = (wantedValue) => {
+          if (wantedValue === true) return false;           // block video
+          return _origShouldAnswer ? _origShouldAnswer(wantedValue) : wantedValue;
+        };
       }
       // ─────────────────────────────────────────────────────────────────────
 
-      await call.answer();
+      // Race answer() against a 12-second watchdog so a stuck SDK loop
+      // never freezes the UI permanently.
+      await Promise.race([
+        call.answer(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('answer() timed out after 12 s')), 12000),
+        ),
+      ]);
 
       setActiveCall(call);
       setIncomingCall(null);

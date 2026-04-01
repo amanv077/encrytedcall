@@ -398,7 +398,7 @@ const api = {
                 m.body_enc, m.origin_ts,
                 snippet(messages_fts, 3, '<mark>', '</mark>', '…', 20) AS highlight
               FROM messages_fts
-              JOIN messages m ON m.rowid = messages_fts.rowid
+              JOIN messages m ON m.id = messages_fts.id
               WHERE messages_fts MATCH ?
                 AND m.room_id = ?
                 AND m.redacted = 0
@@ -410,6 +410,40 @@ const api = {
       });
     } catch (err) {
       console.error('[db.worker] searchMessages error:', err);
+    }
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...(await _rowToItem(row, await _decrypt(row.body_enc))),
+        highlight: row.highlight || '',
+      })),
+    );
+  },
+
+  /**
+   * FTS5 global search — same as searchMessages but across ALL rooms.
+   * Used by the top-bar search to return results from every conversation.
+   */
+  async searchAllMessages(query, limit = 40) {
+    if (!db || !query?.trim()) return [];
+    const rows = [];
+    try {
+      db.exec({
+        sql: `SELECT
+                m.id, m.room_id, m.sender, m.sender_name, m.msg_type,
+                m.body_enc, m.origin_ts,
+                snippet(messages_fts, 3, '<mark>', '</mark>', '…', 20) AS highlight
+              FROM messages_fts
+              JOIN messages m ON m.id = messages_fts.id
+              WHERE messages_fts MATCH ?
+                AND m.redacted = 0
+              ORDER BY bm25(messages_fts)
+              LIMIT ?`,
+        bind: [`${query.trim()}*`, limit],
+        rowMode: 'object',
+        callback: (row) => rows.push(row),
+      });
+    } catch (err) {
+      console.error('[db.worker] searchAllMessages error:', err);
     }
     return Promise.all(
       rows.map(async (row) => ({

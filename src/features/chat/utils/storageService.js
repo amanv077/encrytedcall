@@ -119,6 +119,15 @@ class StorageService {
     return _getApi().searchMessages(roomId, query, limit);
   }
 
+  /**
+   * Cross-room FTS5 search — searches every stored conversation.
+   * Used by the global top-bar search.
+   */
+  async searchAllMessages(query, limit = 40) {
+    if (!this._ready) return [];
+    return _getApi().searchAllMessages(query, limit);
+  }
+
   async countMessages(roomId) {
     if (!this._ready) return 0;
     return _getApi().countMessages(roomId);

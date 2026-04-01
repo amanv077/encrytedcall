@@ -102,3 +102,5 @@ export const selectHasMore = (roomId) => (state) =>
   state.chat.hasMoreByRoom[roomId] !== false;
 export const selectIsSending = (roomId) => (state) =>
   state.chat.sendingByRoom[roomId] || false;
+/** All loaded messages keyed by roomId — used for cross-room in-memory search. */
+export const selectAllMessagesByRoom = (state) => state.chat.messagesByRoom;

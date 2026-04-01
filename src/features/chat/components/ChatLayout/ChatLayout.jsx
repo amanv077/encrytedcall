@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Typography, Button, Space, Avatar, Tooltip, Input } from 'antd';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Typography, Button, Space, Avatar, Tooltip, Input, Dropdown, Spin } from 'antd';
 import {
   PhoneOutlined,
   VideoCameraOutlined,
@@ -17,10 +17,12 @@ import {
   GlobalOutlined,
   EllipsisOutlined,
   FormOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { setActiveRoom, selectActiveRoomId } from '../../../../store/chatSlice';
+import { setActiveRoom, selectActiveRoomId, selectAllMessagesByRoom } from '../../../../store/chatSlice';
 import { selectCallMode, selectUserSearchOpen } from '../../../../store/uiSlice';
+import { storageService } from '../../utils/storageService';
 import { openUserSearch } from '../../../../store/uiSlice';
 import { matrixManager } from '../../utils/matrixClient';
 import { roomService } from '../../utils/roomService';
@@ -92,15 +94,57 @@ function NavItem({ icon, label, active, onClick }) {
 
 // ── ChatLayout ────────────────────────────────────────────────────────────────
 
+// ── Global search helpers ──────────────────────────────────────────────────────
+
+function _highlightGlobal(text, term) {
+  if (!text || !term) return text || '';
+  try {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(new RegExp(escaped, 'gi'), (m) => `<mark>${m}</mark>`);
+  } catch {
+    return text;
+  }
+}
+
+function _getRoomDisplayName(client, roomId) {
+  if (!client || !roomId) return roomId || '';
+  const room = client.getRoom(roomId);
+  if (!room) return roomId;
+  const myUserId = client.getUserId();
+  const mDirect = client.getAccountData?.('m.direct');
+  let isDM = false;
+  if (mDirect?.getContent) {
+    isDM = Object.values(mDirect.getContent() || {}).flat().includes(roomId);
+  }
+  if (isDM) {
+    const otherId = room.getJoinedMembers().find((m) => m.userId !== myUserId)?.userId;
+    const member = otherId ? room.getMember(otherId) : null;
+    return member?.name || member?.rawDisplayName || room.name || roomId;
+  }
+  return room.name || roomId;
+}
+
+// ── ChatLayout ────────────────────────────────────────────────────────────────
+
 export default function ChatLayout({ onLogout }) {
   const dispatch = useDispatch();
-  const activeRoomId   = useSelector(selectActiveRoomId);
-  const callMode       = useSelector(selectCallMode);
-  const userSearchOpen = useSelector(selectUserSearchOpen);
+  const activeRoomId      = useSelector(selectActiveRoomId);
+  const callMode          = useSelector(selectCallMode);
+  const userSearchOpen    = useSelector(selectUserSearchOpen);
+  const allMessagesByRoom = useSelector(selectAllMessagesByRoom);
 
-  const [isReady, setIsReady]           = useState(matrixManager.isReady);
-  const [dialerNotice, setDialerNotice] = useState('');
+  const [isReady, setIsReady]             = useState(matrixManager.isReady);
+  const [dialerNotice, setDialerNotice]   = useState('');
   const [msgSearchOpen, setMsgSearchOpen] = useState(false);
+  const [contactOpen, setContactOpen]     = useState(false);
+
+  // ── Global search state ───────────────────────────────────────────────────
+  const [globalQuery, setGlobalQuery]           = useState('');
+  const [globalResults, setGlobalResults]       = useState([]);
+  const [isGlobalSearching, setIsGlobalSearching] = useState(false);
+  const [globalDropOpen, setGlobalDropOpen]     = useState(false);
+  const globalDebounceRef = useRef(null);
+  const globalSearchWrapRef = useRef(null);
 
   const {
     incomingCall, activeCall, callState,
@@ -118,10 +162,82 @@ export default function ChatLayout({ onLogout }) {
     return () => clearInterval(interval);
   }, [isReady]);
 
+  // Close the global search dropdown when clicking outside
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (globalSearchWrapRef.current && !globalSearchWrapRef.current.contains(e.target)) {
+        setGlobalDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const handleGlobalSearch = useCallback((e) => {
+    const q = e.target.value;
+    setGlobalQuery(q);
+    if (globalDebounceRef.current) clearTimeout(globalDebounceRef.current);
+
+    if (!q.trim() || q.trim().length < 2) {
+      setGlobalResults([]);
+      setGlobalDropOpen(false);
+      setIsGlobalSearching(false);
+      return;
+    }
+
+    // Phase 1: instant in-memory search across all loaded rooms
+    const lower = q.trim().toLowerCase();
+    const inMemory = [];
+    Object.entries(allMessagesByRoom).forEach(([roomId, msgs]) => {
+      msgs.forEach((item) => {
+        if (item.type === 'message' && item.body && item.body.toLowerCase().includes(lower)) {
+          inMemory.push({ ...item, highlight: _highlightGlobal(item.body, q.trim()) });
+        }
+      });
+    });
+    // Sort most-recent first
+    inMemory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    setGlobalResults(inMemory.slice(0, 40));
+    setGlobalDropOpen(true);
+
+    // Phase 2: FTS5 search across all rooms
+    setIsGlobalSearching(true);
+    globalDebounceRef.current = setTimeout(async () => {
+      try {
+        const ftsResults = await storageService.searchAllMessages(q.trim());
+        const inMemoryIds = new Set(inMemory.map((r) => r.eventId));
+        const extra = (ftsResults || []).filter((r) => !inMemoryIds.has(r.eventId));
+        const merged = [...inMemory, ...extra].slice(0, 40);
+        setGlobalResults(merged);
+        setGlobalDropOpen(merged.length > 0);
+      } catch (err) {
+        console.error('[ChatLayout] global search error:', err);
+      } finally {
+        setIsGlobalSearching(false);
+      }
+    }, 300);
+  }, [allMessagesByRoom]);
+
+  const handleGlobalResultClick = (roomId) => {
+    dispatch(setActiveRoom(roomId));
+    setGlobalQuery('');
+    setGlobalResults([]);
+    setGlobalDropOpen(false);
+    setMsgSearchOpen(false);
+    setContactOpen(false);
+  };
+
+  const clearGlobalSearch = () => {
+    setGlobalQuery('');
+    setGlobalResults([]);
+    setGlobalDropOpen(false);
+  };
+
   const handleSelectRoom = (roomId) => {
     dispatch(setActiveRoom(roomId));
     setDialerNotice('');
     setMsgSearchOpen(false);
+    setContactOpen(false);
   };
 
   const handleCall = async (isVideo = true) => {
@@ -170,13 +286,27 @@ export default function ChatLayout({ onLogout }) {
         </div>
 
         <div className={styles.navBottom}>
-          <NavItem icon={<SettingOutlined />} label="Settings" />
-          <Avatar
-            src={client?.getUser(myUserId)?.avatarUrl || undefined}
-            icon={<UserOutlined />}
-            size={36}
-            className={styles.navAvatar}
-          />
+          <Tooltip title="Settings" placement="right">
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'logout',
+                    label: 'Sign out',
+                    danger: true,
+                    icon: <span style={{ fontSize: 14 }}>⎋</span>,
+                    onClick: onLogout,
+                  },
+                ],
+              }}
+              trigger={['click']}
+              placement="topRight"
+            >
+              <div className={styles.navItem}>
+                <span className={styles.navIcon}><SettingOutlined /></span>
+              </div>
+            </Dropdown>
+          </Tooltip>
         </div>
       </nav>
 
@@ -185,12 +315,52 @@ export default function ChatLayout({ onLogout }) {
 
         {/* Top bar */}
         <div className={styles.topBar}>
-          <Input
-            prefix={<SearchOutlined style={{ color: '#9ba8b5' }} />}
-            placeholder="Search patients, requests, messages, tools…  ⌘ K"
-            className={styles.globalSearch}
-            bordered={false}
-          />
+          {/* Global search with results dropdown */}
+          <div className={styles.globalSearchWrap} ref={globalSearchWrapRef}>
+            <Input
+              prefix={<SearchOutlined style={{ color: '#9ba8b5' }} />}
+              suffix={
+                globalQuery
+                  ? <CloseOutlined style={{ color: '#9ba8b5', cursor: 'pointer', fontSize: 12 }} onClick={clearGlobalSearch} />
+                  : null
+              }
+              placeholder="Search messages across all chats…  ⌘ K"
+              className={styles.globalSearch}
+              bordered={false}
+              value={globalQuery}
+              onChange={handleGlobalSearch}
+              onFocus={() => globalResults.length > 0 && setGlobalDropOpen(true)}
+            />
+            {globalDropOpen && (
+              <div className={styles.globalDropdown}>
+                {isGlobalSearching && globalResults.length === 0 && (
+                  <div className={styles.globalDropLoading}><Spin size="small" /> Searching…</div>
+                )}
+                {!isGlobalSearching && globalResults.length === 0 && (
+                  <div className={styles.globalDropEmpty}>No messages found</div>
+                )}
+                {globalResults.map((item) => (
+                  <div
+                    key={item.eventId}
+                    className={styles.globalDropItem}
+                    onClick={() => handleGlobalResultClick(item.roomId)}
+                  >
+                    <div className={styles.globalDropRoom}>
+                      {_getRoomDisplayName(client, item.roomId)}
+                    </div>
+                    <div
+                      className={styles.globalDropBody}
+                      dangerouslySetInnerHTML={{ __html: item.highlight || item.body }}
+                    />
+                    <div className={styles.globalDropMeta}>
+                      <span>{item.senderName || item.sender}</span>
+                      <span>{new Date(item.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className={styles.topBarRight}>
             <span className={styles.langToggle}>
               <GlobalOutlined style={{ marginRight: 4 }} /> English
@@ -199,12 +369,15 @@ export default function ChatLayout({ onLogout }) {
             <Tooltip title="Notifications">
               <Button type="text" icon={<BellOutlined />} className={styles.topBarBtn} />
             </Tooltip>
-            <Avatar
-              src={client?.getUser(myUserId)?.avatarUrl || undefined}
-              icon={<UserOutlined />}
-              size={32}
-              style={{ cursor: 'pointer', border: '2px solid #006d6a' }}
-            />
+            <Tooltip title={contactOpen ? 'Hide my profile' : 'My profile'}>
+              <Avatar
+                src={client?.getUser(myUserId)?.avatarUrl || undefined}
+                icon={<UserOutlined />}
+                size={32}
+                onClick={() => setContactOpen((v) => !v)}
+                className={`${styles.topBarAvatar} ${contactOpen ? styles.topBarAvatarActive : ''}`}
+              />
+            </Tooltip>
           </div>
         </div>
 
@@ -332,8 +505,11 @@ export default function ChatLayout({ onLogout }) {
             )}
           </div>
 
-          {/* Right contact panel – always rendered, shows placeholder when no room selected */}
-          <ContactPanel roomId={activeRoomId} />
+          {/* My profile panel – always in DOM, slides in/out via CSS */}
+          <ContactPanel
+            open={contactOpen}
+            onClose={() => setContactOpen(false)}
+          />
         </div>
       </div>
 

@@ -1,47 +1,291 @@
-.loginContainer {
+// ── Page shell ────────────────────────────────────────────────────────────────
+
+.page {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+// ── Left brand panel ──────────────────────────────────────────────────────────
+
+.brand {
+  flex: 1;
+  background: linear-gradient(145deg, #006d6a 0%, #004d4b 60%, #003836 100%);
+  display: flex;
+  flex-direction: column;
+  padding: 48px 56px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+
+  // Subtle decorative circle
+  &::after {
+    content: '';
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.08);
+    bottom: -120px;
+    right: -100px;
+    pointer-events: none;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.06);
+    top: -80px;
+    left: -60px;
+    pointer-events: none;
+  }
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 64px;
+}
+
+.logoIcon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  background-color: #0c1317;
 }
 
-.card {
-  width: 400px;
-  background: #202c33;
-  border: none;
-  box-shadow: 0 12px 24px rgba(0,0,0,0.5);
-}
-
-.bodyStyle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.icon {
-  font-size: 48px;
-  color: #00a884;
-  margin-bottom: 16px;
-}
-
-.title {
-  margin: 0;
-  color: #e9edef;
-}
-
-.subtitle {
-  margin-bottom: 32px;
-  color: #8696a0;
-}
-
-.input {
-  background: #2a3942;
-  border: none;
+.logoText {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   color: #fff;
 }
 
-.btnPrimary {
-  background: #00a884;
-  border: none;
+.headline {
+  flex: 1;
+  max-width: 460px;
+}
+
+.headlineTitle {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 16px;
+  color: #fff;
+}
+
+.headlineSub {
+  font-size: 16px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.6;
+  margin: 0 0 48px;
+}
+
+.featureList {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+.featureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.featureIcon {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  color: rgba(255,255,255,0.9);
+  margin-top: 1px;
+}
+
+.featureTitle {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 3px;
+}
+
+.featureDesc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  line-height: 1.5;
+}
+
+.brandFooter {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+}
+
+// ── Right form panel ──────────────────────────────────────────────────────────
+
+.formSide {
+  width: 480px;
+  min-width: 480px;
+  background: #f4f6f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+
+  @media (max-width: 900px) {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.formCard {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  padding: 40px 36px 32px;
+  width: 100%;
+  max-width: 380px;
+}
+
+// ── Card header ───────────────────────────────────────────────────────────────
+
+.formHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.formLogo {
+  margin-bottom: 16px;
+}
+
+.formLogoIcon {
+  width: 48px;
+  height: 48px;
+  background: #006d6a;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.formTitle {
+  color: #1a1f2e !important;
+  margin: 0 0 4px !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+
+.formSub {
+  color: #6b7585;
+  font-size: 14px;
+}
+
+// ── Form fields ───────────────────────────────────────────────────────────────
+
+.form {
+  :global(.ant-form-item-label) {
+    padding-bottom: 4px;
+  }
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1f2e;
+}
+
+.input {
+  border-radius: 8px !important;
+  border-color: #e4e8ec !important;
+  height: 44px;
+
+  :global(.ant-input),
+  :global(.ant-input-password) {
+    font-size: 14px;
+    color: #1a1f2e;
+
+    &::placeholder { color: #9ba8b5; }
+  }
+
+  &:hover  { border-color: #006d6a !important; }
+  &:focus-within {
+    border-color: #006d6a !important;
+    box-shadow: 0 0 0 2px rgba(0,109,106,0.1) !important;
+  }
+}
+
+.inputIcon {
+  color: #9ba8b5;
+  font-size: 15px;
+}
+
+.forgotRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+
+.forgotLink {
+  font-size: 13px;
+  color: #006d6a;
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+.alert {
+  margin-top: 8px;
+  border-radius: 8px !important;
+}
+
+// ── Submit button ─────────────────────────────────────────────────────────────
+
+.submitBtn {
+  height: 46px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  background: #006d6a !important;
+  border-color: #006d6a !important;
+  letter-spacing: 0.2px;
+
+  &:hover:not(:disabled) {
+    background: #005a57 !important;
+    border-color: #005a57 !important;
+  }
+}
+
+// ── Footer note ───────────────────────────────────────────────────────────────
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 24px;
+  font-size: 12px;
+  color: #9ba8b5;
+}
+
+.footerIcon {
+  font-size: 13px;
+  color: #006d6a;
 }
