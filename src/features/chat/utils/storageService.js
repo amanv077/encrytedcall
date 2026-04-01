@@ -87,8 +87,8 @@ class StorageService {
 
   savePoll(poll) {
     if (!this._ready) return Promise.resolve();
-    return _getApi().savePoll(poll).catch((err) => {
-      console.error('[storageService] savePoll error:', err);
+    return _getApi().savePoll(poll).catch(() => {
+      console.error('[storageService] savePoll error');
     });
   }
 
@@ -148,6 +148,30 @@ class StorageService {
   async getVotesByPoll(pollId) {
     if (!this._ready) return [];
     return _getApi().getVotesByPoll(pollId);
+  }
+
+  saveQuiz(quiz) {
+    if (!this._ready) return Promise.resolve();
+    return _getApi().saveQuiz(quiz).catch(() => {
+      console.error('[storageService] saveQuiz error');
+    });
+  }
+
+  saveQuizAnswer(answer) {
+    if (!this._ready) return Promise.resolve();
+    return _getApi().saveQuizAnswer(answer).catch(() => {
+      console.error('[storageService] saveQuizAnswer error');
+    });
+  }
+
+  async getQuizzesByRoom(roomId) {
+    if (!this._ready) return [];
+    return _getApi().getQuizzesByRoom(roomId);
+  }
+
+  async getQuizAnswersByRoom(roomId) {
+    if (!this._ready) return [];
+    return _getApi().getQuizAnswersByRoom(roomId);
   }
 
   // ── Sync state ─────────────────────────────────────────────────────────────

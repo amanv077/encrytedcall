@@ -30,7 +30,11 @@ const chatSlice = createSlice({
         state.messagesByRoom[roomId] = [];
       }
       const existing = state.messagesByRoom[roomId];
-      const alreadyExists = existing.some((m) => m.eventId === message.eventId);
+      const alreadyExists = existing.some(
+        (m) =>
+          m.eventId === message.eventId ||
+          (Boolean(message.txnId) && Boolean(m.txnId) && m.txnId === message.txnId),
+      );
       if (!alreadyExists) {
         state.messagesByRoom[roomId] = [...existing, message];
       }
@@ -47,7 +51,11 @@ const chatSlice = createSlice({
       // BEFORE replacing the echo — otherwise we'd end up with two copies.
       const deduped =
         message.eventId && message.eventId !== tempId
-          ? msgs.filter((m) => m.eventId !== message.eventId)
+          ? msgs.filter(
+              (m) =>
+                m.eventId !== message.eventId &&
+                !(Boolean(message.txnId) && Boolean(m.txnId) && m.txnId === message.txnId),
+            )
           : msgs;
 
       const idx = deduped.findIndex((m) => m.eventId === tempId);
