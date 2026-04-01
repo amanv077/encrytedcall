@@ -1,0 +1,53 @@
+.resultsWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resultRow {
+  border: 1px solid #e7eef5;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+
+  &:hover {
+    border-color: #b7d2e8;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  }
+}
+
+.selected {
+  border-color: #91d5c6;
+}
+
+.winner {
+  background: #f6ffed;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.valueRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.winnerIcon {
+  color: #faad14;
+}
+
+.countLabel {
+  color: #5c6b7a;
+}
+
+.emptyState {
+  color: #7b8794;
+  font-size: 13px;
+}

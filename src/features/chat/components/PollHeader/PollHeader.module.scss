@@ -1,0 +1,34 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.question {
+  margin: 0 !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+
+.statusTag {
+  margin-inline-end: 0 !important;
+  white-space: nowrap;
+}
+
+.metaRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metaText {
+  font-size: 12px;
+  color: #5c6b7a;
+}

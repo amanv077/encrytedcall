@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Spin, Typography, Empty, Input } from 'antd';
+import { Spin, Typography, Empty, Input, Modal } from 'antd';
 import { LockOutlined, SearchOutlined, CloseOutlined } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
 import { storageService } from '../../utils/storageService';
@@ -7,12 +7,15 @@ import { selectActiveRoomId } from '../../../../store/chatSlice';
 import { useChat } from '../../hooks/useChat';
 import { useTimeline } from '../../hooks/useTimeline';
 import { useRoomMembership } from '../../hooks/useRoomMembership';
+import { usePolls } from '../../hooks/usePolls';
 import { roomService } from '../../utils/roomService';
 import { matrixManager } from '../../utils/matrixClient';
 import MessageBubble from '../MessageBubble/MessageBubble';
 import CallHistoryItem from '../CallHistoryItem/CallHistoryItem';
 import InviteItem, { RoomInviteGate } from '../InviteItem/InviteItem';
 import MessageInput from '../MessageInput/MessageInput';
+import PollCard from '../PollCard/PollCard';
+import PollCreator from '../PollCreator/PollCreator';
 import styles from './ChatPanel.module.scss';
 
 const { Text } = Typography;
@@ -61,6 +64,7 @@ function isSameDay(ts1, ts2) {
 export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onCloseSearch }) {
   const roomId = useSelector(selectActiveRoomId);
   const membership = useRoomMembership(roomId);
+  const { createPoll, creatingPoll } = usePolls();
 
   const { isLoading, isSending, hasMore, sendMessage, loadMore } = useChat(roomId);
   const timeline = useTimeline(roomId);
@@ -74,6 +78,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [pollModalOpen, setPollModalOpen] = useState(false);
 
   // Clear search state whenever the panel is closed or room changes
   useEffect(() => {
@@ -110,6 +115,22 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   }, [roomId]);
 
   const isEncrypted = roomId ? roomService.isRoomEncrypted(roomId) : false;
+
+  const handleActionClick = useCallback((actionLabel) => {
+    if (actionLabel === 'Poll') {
+      setPollModalOpen(true);
+    }
+  }, []);
+
+  const handleCreatePoll = useCallback(async (pollDraft) => {
+    if (!roomId || !pollDraft) return;
+    try {
+      await createPoll(roomId, pollDraft);
+      setPollModalOpen(false);
+    } catch (err) {
+      console.error('[ChatPanel] createPoll failed:', err);
+    }
+  }, [createPoll, roomId]);
 
   // ── Derive invite details for the gate ──────────────────────────────────────
   const inviteDetails = React.useMemo(() => {
@@ -304,6 +325,17 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
                 {item.type === 'invite' && <InviteItem item={item} />}
 
                 {item.type === 'system' && <SystemMessage text={item.text} />}
+
+                {item.type === 'poll' && item.poll && (
+                  <div className={styles.pollTimelineItem}>
+                    <PollCard
+                      poll={item.poll}
+                      showResults
+                      lockAfterSubmit={item.poll.disableAfterSubmit}
+                      allowVoteChange={item.poll.allowVoteChange}
+                    />
+                  </div>
+                )}
               </React.Fragment>
             );
           })}
@@ -317,7 +349,19 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
         onSend={sendMessage}
         disabled={!isReady || isSending || !roomId}
         isEncrypted={isEncrypted}
+        onActionClick={handleActionClick}
       />
+
+      <Modal
+        title="Create Poll"
+        open={pollModalOpen}
+        onCancel={() => setPollModalOpen(false)}
+        footer={null}
+        destroyOnHidden
+        width={640}
+      >
+        <PollCreator onCreate={handleCreatePoll} loading={creatingPoll} />
+      </Modal>
     </div>
   );
 }

@@ -44,6 +44,8 @@ class MatrixClientManager {
       const loginRes = await tempClient.login('m.login.password', {
         user:                        userId,
         password:                    password,
+        // user:                        "@rajhanani04:matrix.org",
+        // password:                    "12345678",
         initial_device_display_name: 'Healthcare Web Portal',
         ...(reuseDeviceId ? { device_id: reuseDeviceId } : {}),
       });

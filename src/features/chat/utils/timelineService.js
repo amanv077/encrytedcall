@@ -42,6 +42,12 @@ export function normalizeMatrixEvent(event, myUserId) {
   const type = event.getType();
   const content = event.getContent() || {};
 
+  const readExtText = (value) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    return value['org.matrix.msc1767.text'] || value.text || '';
+  };
+
   // ── Text messages ─────────────────────────────────────────────────────────
   if (type === 'm.room.message') {
     const msgtype = content.msgtype || 'm.text';
@@ -85,6 +91,56 @@ export function normalizeMatrixEvent(event, myUserId) {
       isEncrypted: true,
       status: failed ? 'decrypt_failed' : 'decrypting',
       isDecryptionFailure: failed,
+    };
+  }
+
+  // ── Poll events ───────────────────────────────────────────────────────────
+  if (type === 'm.poll.start') {
+    // Accept both direct and nested payloads
+    const start = content['m.poll.start'] || content['org.matrix.msc3381.poll.start'] || content;
+    const question = readExtText(start.question);
+    const answers = Array.isArray(start.answers) ? start.answers : [];
+    const maxSelections = Number(start.max_selections || 1);
+
+    const options = answers.map((ans, idx) => ({
+      id: ans.id || `opt_${idx + 1}`,
+      label: readExtText(ans),
+      votes: 0,
+    }));
+
+    if (!question || options.length < 2) return null;
+
+    return {
+      type: 'poll',
+      eventId,
+      roomId,
+      sender,
+      senderName,
+      timestamp,
+      isOutgoing,
+      poll: {
+        id: eventId,
+        question,
+        options,
+        allowMultiple: maxSelections > 1,
+        closed: false,
+        disableAfterSubmit: false,
+        allowVoteChange: true,
+        myVotes: [],
+      },
+    };
+  }
+
+  if (type === 'm.poll.end') {
+    const endContent = content['m.poll.end'] || content['org.matrix.msc3381.poll.end'] || content;
+    const endText = readExtText(endContent) || 'Poll ended';
+    return {
+      type: 'system',
+      eventId,
+      roomId,
+      sender,
+      text: endText,
+      timestamp,
     };
   }
 

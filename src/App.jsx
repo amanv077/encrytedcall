@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import { ConfigProvider, theme, Spin } from 'antd';
-import LoginPage from './features/auth/pages/LoginPage/LoginPage';
+import LoginPage from './features/auth/pages/LoginPage/LoginPage.jsx';
 import ChatLayout from './features/chat/components/ChatLayout/ChatLayout';
 import { matrixManager } from './features/chat/utils/matrixClient';
 import { storageService } from './features/chat/utils/storageService';

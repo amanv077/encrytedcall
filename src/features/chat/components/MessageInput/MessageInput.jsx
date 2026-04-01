@@ -8,6 +8,7 @@ import {
   SolutionOutlined,
   CalendarOutlined,
   AppstoreOutlined,
+  BarChartOutlined,
   LockOutlined,
 } from '@ant-design/icons';
 import styles from './MessageInput.module.scss';
@@ -16,6 +17,7 @@ const ACTION_CHIPS = [
   { icon: <FileTextOutlined />,  label: 'Case' },
   { icon: <SolutionOutlined />,  label: 'Job' },
   { icon: <CalendarOutlined />,  label: 'Event' },
+  { icon: <BarChartOutlined />,  label: 'Poll' },
   { icon: <AudioOutlined />,     label: 'Voice note' },
   { icon: <AppstoreOutlined />,  label: 'Interactive' },
 ];
@@ -23,9 +25,14 @@ const ACTION_CHIPS = [
 /**
  * MessageInput – compose + send, with action chip tray above.
  *
- * @param {{ onSend, disabled, isEncrypted }} props
+ * @param {{ onSend, disabled, isEncrypted, onActionClick }} props
  */
-export default function MessageInput({ onSend, disabled = false, isEncrypted = false }) {
+export default function MessageInput({
+  onSend,
+  disabled = false,
+  isEncrypted = false,
+  onActionClick,
+}) {
   const [text, setText]   = useState('');
   const textareaRef       = useRef(null);
 
@@ -53,7 +60,12 @@ export default function MessageInput({ onSend, disabled = false, isEncrypted = f
       <div className={styles.chipsRow}>
         {ACTION_CHIPS.map(({ icon, label }) => (
           <Tooltip key={label} title={label}>
-            <button className={styles.chip} disabled={disabled}>
+            <button
+              className={styles.chip}
+              disabled={disabled}
+              onClick={() => onActionClick?.(label)}
+              type="button"
+            >
               {icon}
               <span className={styles.chipLabel}>{label}</span>
             </button>

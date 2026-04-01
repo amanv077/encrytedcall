@@ -85,6 +85,20 @@ class StorageService {
     return _getApi().updateMessageBody(eventId, newBody);
   }
 
+  savePoll(poll) {
+    if (!this._ready) return Promise.resolve();
+    return _getApi().savePoll(poll).catch((err) => {
+      console.error('[storageService] savePoll error:', err);
+    });
+  }
+
+  saveVote(vote) {
+    if (!this._ready) return Promise.resolve();
+    return _getApi().saveVote(vote).catch((err) => {
+      console.error('[storageService] saveVote error:', err);
+    });
+  }
+
   // ── Read ───────────────────────────────────────────────────────────────────
 
   /**
@@ -108,6 +122,16 @@ class StorageService {
   async countMessages(roomId) {
     if (!this._ready) return 0;
     return _getApi().countMessages(roomId);
+  }
+
+  async getPollsByRoom(roomId) {
+    if (!this._ready) return [];
+    return _getApi().getPollsByRoom(roomId);
+  }
+
+  async getVotesByPoll(pollId) {
+    if (!this._ready) return [];
+    return _getApi().getVotesByPoll(pollId);
   }
 
   // ── Sync state ─────────────────────────────────────────────────────────────

@@ -160,26 +160,32 @@ function _createSchema() {
       DELETE FROM messages_fts WHERE rowid = old.rowid;
     END;
 
-    -- ── Polls ─────────────────────────────────────────────────────────────
+    -- ── Polls persistence ─────────────────────────────────────────────────
+    DROP TABLE IF EXISTS poll_responses;
     CREATE TABLE IF NOT EXISTS polls (
-      id            TEXT PRIMARY KEY,
-      room_id       TEXT NOT NULL,
-      creator       TEXT NOT NULL,
-      question_enc  TEXT NOT NULL,
-      options_json  TEXT NOT NULL,
-      closed        INTEGER DEFAULT 0,
-      origin_ts     INTEGER NOT NULL
+      poll_id     TEXT PRIMARY KEY,
+      room_id     TEXT NOT NULL,
+      question    TEXT NOT NULL,
+      options_json TEXT NOT NULL,
+      created_by  TEXT NOT NULL,
+      created_at  INTEGER NOT NULL,
+      is_closed   INTEGER DEFAULT 0
     );
 
-    CREATE TABLE IF NOT EXISTS poll_responses (
-      id        TEXT PRIMARY KEY,
-      poll_id   TEXT NOT NULL,
-      voter     TEXT NOT NULL,
-      answer    TEXT,
-      origin_ts INTEGER NOT NULL,
-      FOREIGN KEY (poll_id) REFERENCES polls(id) ON DELETE CASCADE,
-      UNIQUE (poll_id, voter)
+    CREATE TABLE IF NOT EXISTS votes (
+      poll_id     TEXT NOT NULL,
+      user_id     TEXT NOT NULL,
+      answer_id   TEXT NOT NULL,
+      updated_at  INTEGER NOT NULL,
+      PRIMARY KEY (poll_id, user_id),
+      FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE
     );
+
+    CREATE INDEX IF NOT EXISTS idx_polls_room_created
+      ON polls(room_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_votes_poll
+      ON votes(poll_id);
 
     -- ── Media cache (AES-CTR key itself AES-GCM encrypted) ───────────────
     CREATE TABLE IF NOT EXISTS media_cache (
@@ -236,8 +242,83 @@ const api = {
   async init() {
     await _generateSessionKey();
     await _initDb();
-    api.clearAll();   // wipe stale rows encrypted with the previous key
+    api.clearMessageData(); // keep polls/votes persisted across reload
   },
+  savePoll(poll) {
+    if (!db || !poll?.pollId || !poll?.roomId || !poll?.question) return;
+    db.exec({
+      sql: `INSERT OR REPLACE INTO polls
+            (poll_id, room_id, question, options_json, created_by, created_at, is_closed)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      bind: [
+        poll.pollId,
+        poll.roomId,
+        poll.question,
+        JSON.stringify(poll.options || []),
+        poll.createdBy || poll.sender || '',
+        poll.createdAt || Date.now(),
+        poll.isClosed ? 1 : 0,
+      ],
+    });
+  },
+
+  saveVote(vote) {
+    if (!db || !vote?.pollId || !vote?.userId || !vote?.answerId) return;
+    db.exec({
+      sql: `INSERT OR REPLACE INTO votes
+            (poll_id, user_id, answer_id, updated_at)
+            VALUES (?, ?, ?, ?)`,
+      bind: [
+        vote.pollId,
+        vote.userId,
+        vote.answerId,
+        vote.timestamp || Date.now(),
+      ],
+    });
+  },
+
+  getPollsByRoom(roomId) {
+    if (!db || !roomId) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT poll_id, room_id, question, options_json, created_by, created_at, is_closed
+            FROM polls
+            WHERE room_id = ?
+            ORDER BY created_at ASC`,
+      bind: [roomId],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    return rows.map((row) => ({
+      pollId: row.poll_id,
+      roomId: row.room_id,
+      question: row.question,
+      options: JSON.parse(row.options_json || '[]'),
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      isClosed: !!row.is_closed,
+    }));
+  },
+
+  getVotesByPoll(pollId) {
+    if (!db || !pollId) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT poll_id, user_id, answer_id, updated_at
+            FROM votes
+            WHERE poll_id = ?`,
+      bind: [pollId],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    return rows.map((row) => ({
+      pollId: row.poll_id,
+      userId: row.user_id,
+      answerId: row.answer_id,
+      timestamp: row.updated_at,
+    }));
+  },
+
 
   /**
    * Persist a TimelineItem.
@@ -399,6 +480,19 @@ const api = {
     return count;
   },
 
+  clearMessageData() {
+    if (!db) return;
+    try {
+      db.exec(`
+        DELETE FROM messages_fts;
+        DELETE FROM sync_state;
+        DELETE FROM messages;
+      `);
+    } catch (err) {
+      console.error('[db.worker] clearMessageData error:', err);
+    }
+  },
+
   /** Wipe all rows without deleting the DB file (lighter than purge). */
   clearAll() {
     if (!db) return;
@@ -406,7 +500,7 @@ const api = {
       db.exec(`
         DELETE FROM messages_fts;
         DELETE FROM media_cache;
-        DELETE FROM poll_responses;
+        DELETE FROM votes;
         DELETE FROM polls;
         DELETE FROM sync_state;
         DELETE FROM messages;
