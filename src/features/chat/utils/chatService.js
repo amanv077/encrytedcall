@@ -35,6 +35,20 @@ class ChatService {
       // Skip historical events loaded during initial sync
       if (toStartOfTimeline) return;
 
+      // We already render our own optimistic local-echo in useChat().
+      // Matrix SDK may also emit a local-echo event for the same outgoing
+      // message, which would create a duplicate bubble in the sender UI.
+      // Ignore SDK local-echo timeline entries from the current user.
+      const myUserId = client.getUserId?.();
+      const isOwnEvent = event.getSender?.() === myUserId;
+      const eventId = event.getId?.();
+      const isSdkLocalEcho =
+        !eventId ||
+        eventId.startsWith('~') || // matrix-js-sdk local echo id pattern
+        event.status != null ||    // sending / queued local status
+        !!event.getUnsigned?.()?.transaction_id;
+      if (isOwnEvent && isSdkLocalEcho) return;
+
       const type = event.getType();
 
       // Handle redactions: remove the target event from local storage
