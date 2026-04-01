@@ -1,9 +1,16 @@
 import { useCallback, useState } from 'react';
 import { matrixManager } from '../chat/utils/matrixClient';
 
+function assertRoomEncrypted(client, roomId) {
+  if (typeof client?.isRoomEncrypted === 'function' && !client.isRoomEncrypted(roomId)) {
+    throw new Error('Polls are allowed only in end-to-end encrypted rooms.');
+  }
+}
+
 export function usePolls() {
   const [creatingPoll, setCreatingPoll] = useState(false);
   const [votingPoll, setVotingPoll] = useState(false);
+  const [endingPoll, setEndingPoll] = useState(false);
 
   const createPoll = useCallback(async (roomId, draft) => {
     if (!roomId) throw new Error('No active room selected.');
@@ -12,8 +19,11 @@ export function usePolls() {
       throw new Error('Poll must have at least two options.');
     }
 
-    const client = matrixManager.getClient();
+    const client =
+      (await matrixManager.ensureDetachedPendingEvents?.()) ||
+      matrixManager.getClient();
     if (!client) throw new Error('Matrix client not initialized.');
+    assertRoomEncrypted(client, roomId);
 
     setCreatingPoll(true);
     try {
@@ -50,8 +60,11 @@ export function usePolls() {
 
     if (answers.length === 0) throw new Error('Select at least one option.');
 
-    const client = matrixManager.getClient();
+    const client =
+      (await matrixManager.ensureDetachedPendingEvents?.()) ||
+      matrixManager.getClient();
     if (!client) throw new Error('Matrix client not initialized.');
+    assertRoomEncrypted(client, roomId);
 
     setVotingPoll(true);
     try {
@@ -71,11 +84,38 @@ export function usePolls() {
     }
   }, []);
 
+  const endPoll = useCallback(async (roomId, pollEventId) => {
+    if (!roomId) throw new Error('No active room selected.');
+    if (!pollEventId) throw new Error('Missing poll event id.');
+
+    const client =
+      (await matrixManager.ensureDetachedPendingEvents?.()) ||
+      matrixManager.getClient();
+    if (!client) throw new Error('Matrix client not initialized.');
+    assertRoomEncrypted(client, roomId);
+
+    setEndingPoll(true);
+    try {
+      const content = {
+        'm.relates_to': {
+          rel_type: 'm.reference',
+          event_id: pollEventId,
+        },
+      };
+
+      return await client.sendEvent(roomId, 'm.poll.end', content);
+    } finally {
+      setEndingPoll(false);
+    }
+  }, []);
+
   return {
     creatingPoll,
     votingPoll,
+    endingPoll,
     createPoll,
     votePoll,
+    endPoll,
   };
 }
 

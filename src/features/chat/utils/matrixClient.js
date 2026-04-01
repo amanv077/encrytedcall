@@ -10,6 +10,7 @@ const REMOTE_WIPE_EVENT = 'com.synapp.remote_wipe';
 
 /** DOM events that reset the idle timer. */
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+const PENDING_EVENT_ORDERING = 'detached';
 
 class MatrixClientManager {
   constructor() {
@@ -31,7 +32,10 @@ class MatrixClientManager {
     try {
       if (this.client) this.client.stopClient();
 
-      const tempClient = sdk.createClient({ baseUrl });
+      const tempClient = sdk.createClient({
+        baseUrl,
+        pendingEventOrdering: PENDING_EVENT_ORDERING,
+      });
 
       // Reuse the saved device_id when the same user logs back in so the
       // homeserver re-registers the same device and the Rust crypto store
@@ -93,7 +97,13 @@ class MatrixClientManager {
   // ── Internal client bootstrap ────────────────────────────────────────────
 
   async _startClient({ baseUrl, userId, accessToken, deviceId }) {
-    this.client = sdk.createClient({ baseUrl, accessToken, userId, deviceId });
+    this.client = sdk.createClient({
+      baseUrl,
+      accessToken,
+      userId,
+      deviceId,
+      pendingEventOrdering: PENDING_EVENT_ORDERING,
+    });
 
     // Enable E2EE (Rust SDK preferred)
     this._usingRustCrypto = false;
@@ -338,6 +348,31 @@ class MatrixClientManager {
   }
 
   getClient() { return this.client; }
+
+  /**
+   * Ensure runtime client uses detached pending-event mode.
+   * Useful after hot-reload / legacy sessions created before this config.
+   */
+  async ensureDetachedPendingEvents() {
+    const current = this.client;
+    if (!current) return null;
+
+    const ordering = current.getOpts?.()?.pendingEventOrdering;
+    // Be strict: anything except explicit "detached" is treated as unsafe.
+    if (ordering === 'detached') return current;
+
+    const session = this._loadSession();
+    if (!session) return current;
+
+    try {
+      chatService.disposeListeners();
+      current.stopClient();
+    } catch (_) {}
+
+    this.client = null;
+    this.isReady = false;
+    return this._startClient(session);
+  }
 }
 
 export const matrixManager = new MatrixClientManager();

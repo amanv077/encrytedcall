@@ -94,8 +94,15 @@ class StorageService {
 
   saveVote(vote) {
     if (!this._ready) return Promise.resolve();
-    return _getApi().saveVote(vote).catch((err) => {
-      console.error('[storageService] saveVote error:', err);
+    return _getApi().saveVote(vote).catch(() => {
+      console.error('[storageService] saveVote error');
+    });
+  }
+
+  closePoll(pollId) {
+    if (!this._ready) return Promise.resolve();
+    return _getApi().closePoll(pollId).catch(() => {
+      console.error('[storageService] closePoll error');
     });
   }
 

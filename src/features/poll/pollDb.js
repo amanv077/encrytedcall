@@ -10,6 +10,11 @@ export async function saveVote(vote) {
   return storageService.saveVote(vote);
 }
 
+export async function closePoll(pollId) {
+  await storageService.init();
+  return storageService.closePoll(pollId);
+}
+
 export async function getPollsByRoom(roomId) {
   await storageService.init();
   return storageService.getPollsByRoom(roomId);

@@ -28,6 +28,7 @@ import { matrixManager } from '../../utils/matrixClient';
 import { roomService } from '../../utils/roomService';
 import { useCallManager } from '../../hooks/useCallManager';
 import { useRoomMembership } from '../../hooks/useRoomMembership';
+import { usePollListener } from '../../../poll/usePollListener';
 import CallOverlay from '../CallOverlay/CallOverlay';
 import ActiveCall from '../ActiveCall/ActiveCall';
 import Sidebar from '../Sidebar/Sidebar';
@@ -257,6 +258,7 @@ export default function ChatLayout({ onLogout }) {
 
   const client     = matrixManager.getClient();
   const myUserId   = client?.getUserId();
+  usePollListener(client);
   const headerInfo = useMemo(
     () => getRoomHeaderInfo(client, activeRoomId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
