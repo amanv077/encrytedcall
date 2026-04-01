@@ -1,6 +1,7 @@
 import React from 'react';
 import { Typography } from 'antd';
 import { LockOutlined, ClockCircleOutlined, CheckOutlined } from '@ant-design/icons';
+import MessageActions from '../MessageActions/MessageActions';
 import styles from './MessageBubble.module.scss';
 
 const { Text } = Typography;
@@ -42,7 +43,11 @@ function StatusIcon({ status }) {
  * @param {{ item: TimelineItem, showSenderName: boolean }} props
  */
 export default function MessageBubble({ item, showSenderName = false }) {
-  const { isOutgoing, senderName, body, timestamp, isEncrypted, status, isDecryptionFailure } = item;
+  const { isOutgoing, senderName, body, timestamp, isEncrypted, status, isDecryptionFailure, isForwarded } = item;
+  const displayBody =
+    isForwarded && typeof body === 'string' && body.startsWith('Forwarded\n')
+      ? body.slice('Forwarded\n'.length)
+      : body;
 
   const isUnreadable = status === 'decrypting' || isDecryptionFailure;
 
@@ -51,8 +56,18 @@ export default function MessageBubble({ item, showSenderName = false }) {
       <div
         className={`${styles.bubble} ${isOutgoing ? styles.bubbleOut : styles.bubbleIn} ${isUnreadable ? styles.bubbleUnreadable : ''}`}
       >
+        <div className={styles.actionsAnchor} onClick={(e) => e.stopPropagation()}>
+          <MessageActions item={item} />
+        </div>
+
         {!isOutgoing && showSenderName && (
           <div className={styles.senderName}>{senderName}</div>
+        )}
+        {isForwarded && (
+          <div className={styles.forwardedTag}>
+            <span className={styles.forwardIcon}>↪</span>
+            <span>Forwarded</span>
+          </div>
         )}
         <Text
           className={`${styles.body} ${isUnreadable ? styles.bodyMuted : ''}`}
@@ -62,7 +77,7 @@ export default function MessageBubble({ item, showSenderName = false }) {
               : undefined
           }
         >
-          {body}
+          {displayBody}
         </Text>
         <div className={styles.meta}>
           {isEncrypted && (

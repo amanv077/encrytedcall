@@ -52,6 +52,7 @@ export function normalizeMatrixEvent(event, myUserId) {
   if (type === 'm.room.message') {
     const msgtype = content.msgtype || 'm.text';
     let body = content.body || '';
+    const isForwarded = !!content['com.synapp.forwarded'] || body.startsWith('Forwarded\n');
 
     // Render location as text for now
     if (msgtype === 'm.image') body = '[Image]';
@@ -71,6 +72,7 @@ export function normalizeMatrixEvent(event, myUserId) {
       isOutgoing,
       isEncrypted: event.isEncrypted?.() ?? false,
       status: 'delivered',
+      isForwarded,
     };
   }
 

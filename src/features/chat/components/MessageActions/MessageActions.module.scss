@@ -1,0 +1,18 @@
+@import '../../../../shared/styles/variables';
+
+.actionsBtn {
+  color: $text-muted !important;
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  &:hover {
+    color: $primary !important;
+    background: $primary-light !important;
+  }
+}
+
