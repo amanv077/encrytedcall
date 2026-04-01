@@ -19,6 +19,7 @@ class MatrixClientManager {
     this._usingRustCrypto = false;
     this._idleTimer     = null;
     this._idleResetBound = this._resetIdleTimer.bind(this);
+    this._lastMarkedReadByRoom = new Map();
   }
 
   // ── Login / session ─────────────────────────────────────────────────────
@@ -271,6 +272,7 @@ class MatrixClientManager {
       client.stopClient();
       this.client = null;
     }
+    this._lastMarkedReadByRoom.clear();
 
     // Wipe OPFS message history (GDPR — no plaintext on disk after logout)
     try { await storageService.clearAll(); } catch (_) {}
@@ -300,6 +302,39 @@ class MatrixClientManager {
     return baseUrl && userId && accessToken
       ? { baseUrl, userId, accessToken, deviceId }
       : null;
+  }
+
+  /**
+   * Mark a room as read immediately (used when the user opens the chat).
+   * Sends both a read receipt and read markers so unread counters update fast.
+   */
+  async markRoomAsRead(roomId) {
+    const client = this.client;
+    if (!client || !roomId) return;
+    const room = client.getRoom(roomId);
+    if (!room) return;
+
+    const events = room.getLiveTimeline?.()?.getEvents?.() || [];
+    // Pick latest visible timeline event
+    const latest = [...events].reverse().find((evt) => !!evt.getId?.());
+    if (!latest) return;
+
+    const latestId = latest.getId();
+    if (!latestId) return;
+    if (this._lastMarkedReadByRoom.get(roomId) === latestId) return;
+
+    try {
+      if (client.sendReadReceipt) {
+        await client.sendReadReceipt(latest);
+      }
+      if (client.setRoomReadMarkers) {
+        // fullyReadEvent and readReceiptEvent both set to latest event
+        await client.setRoomReadMarkers(roomId, latestId, latestId);
+      }
+      this._lastMarkedReadByRoom.set(roomId, latestId);
+    } catch (err) {
+      console.warn('[MatrixClient] markRoomAsRead failed:', err?.message || err);
+    }
   }
 
   getClient() { return this.client; }

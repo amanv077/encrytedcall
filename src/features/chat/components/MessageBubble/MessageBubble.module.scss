@@ -74,6 +74,34 @@
   opacity: 0.8;
 }
 
+.statusTicks {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.78);
+  position: relative;
+  width: 14px;
+  justify-content: flex-start;
+}
+
+.statusTicksSeen {
+  color: #40a9ff;
+}
+
+.tick {
+  font-size: 10px;
+  line-height: 1;
+  position: relative;
+}
+
+.tickFirst {
+  z-index: 1;
+}
+
+.tickSecond {
+  margin-left: -4px;
+  z-index: 2;
+}
+
 // Unreadable state
 .bubbleUnreadable {
   opacity: 0.75;

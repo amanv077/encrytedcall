@@ -220,6 +220,7 @@ export default function ChatLayout({ onLogout }) {
 
   const handleGlobalResultClick = (roomId) => {
     dispatch(setActiveRoom(roomId));
+    matrixManager.markRoomAsRead(roomId);
     setGlobalQuery('');
     setGlobalResults([]);
     setGlobalDropOpen(false);
@@ -238,6 +239,8 @@ export default function ChatLayout({ onLogout }) {
     setDialerNotice('');
     setMsgSearchOpen(false);
     setContactOpen(false);
+    // Reset unread counter immediately when the room is opened.
+    matrixManager.markRoomAsRead(roomId);
   };
 
   const handleCall = async (isVideo = true) => {

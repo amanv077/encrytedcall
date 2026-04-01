@@ -93,6 +93,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [receiptVersion, setReceiptVersion] = useState(0);
 
   // Clear search state whenever the panel is closed or room changes
   useEffect(() => {
@@ -149,6 +150,63 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
 
   const isEncrypted = roomId ? roomService.isRoomEncrypted(roomId) : false;
 
+  // Force a lightweight re-compute when Matrix read receipts arrive.
+  // Receipt events do not always change timeline length/content, so relying on
+  // `timeline` dependency alone can miss seen-status updates.
+  useEffect(() => {
+    const client = matrixManager.getClient();
+    if (!client || !roomId) return;
+    const onReceipt = (_event, room) => {
+      if (room?.roomId === roomId) {
+        setReceiptVersion((v) => v + 1);
+      }
+    };
+    client.on('Room.receipt', onReceipt);
+    return () => client.removeListener('Room.receipt', onReceipt);
+  }, [roomId]);
+
+  // Build per-message outgoing status from Matrix receipts:
+  // - default outgoing state after send => delivered (double tick)
+  // - seen when another member's read-marker has progressed to this message
+  //   (or beyond) in the room timeline.
+  const outgoingStatusByEventId = React.useMemo(() => {
+    if (!roomId) return {};
+    const client = matrixManager.getClient();
+    const room = client?.getRoom(roomId);
+    const myUserId = client?.getUserId?.();
+    if (!room || !myUserId) return {};
+
+    const roomEvents = room.getLiveTimeline?.()?.getEvents?.() || [];
+    const roomIndexByEventId = new Map();
+    roomEvents.forEach((evt, idx) => {
+      const id = evt.getId?.();
+      if (id) roomIndexByEventId.set(id, idx);
+    });
+
+    // Determine farthest read index from all other joined members.
+    let maxReadIdx = -1;
+    const others = room.getJoinedMembers?.().filter((m) => m.userId !== myUserId) || [];
+    for (const member of others) {
+      const readUpToEventId = room.getEventReadUpTo?.(member.userId, true);
+      if (!readUpToEventId) continue;
+      const idx = roomIndexByEventId.get(readUpToEventId);
+      if (idx != null && idx > maxReadIdx) maxReadIdx = idx;
+    }
+
+    const statusMap = {};
+    timeline.forEach((item) => {
+      if (item.type !== 'message' || !item.isOutgoing) return;
+      if (item.status === 'sending' || item.status === 'failed') {
+        statusMap[item.eventId] = item.status;
+        return;
+      }
+      const msgIdx = roomIndexByEventId.get(item.eventId);
+      const seen = msgIdx != null && maxReadIdx >= 0 && msgIdx <= maxReadIdx;
+      statusMap[item.eventId] = seen ? 'seen' : 'delivered';
+    });
+    return statusMap;
+  }, [roomId, timeline, receiptVersion]);
+
   const handleActionClick = useCallback((actionLabel) => {
     if (actionLabel === 'Poll') {
       setPollModalOpen(true);
@@ -164,6 +222,12 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       console.error('[ChatPanel] createPoll failed:', err);
     }
   }, [createPoll, roomId]);
+
+  // Immediately mark opened conversation as read; keeps unread badge in sync.
+  useEffect(() => {
+    if (!roomId || membership !== 'join') return;
+    matrixManager.markRoomAsRead(roomId);
+  }, [roomId, membership, timeline.length]);
 
   // ── Derive invite details for the gate ──────────────────────────────────────
   const inviteDetails = React.useMemo(() => {
@@ -341,7 +405,14 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
                 {showDateDivider && <DateDivider timestamp={item.timestamp} />}
 
                 {item.type === 'message' && (
-                  <MessageBubble item={item} showSenderName={showSenderName} />
+                  <MessageBubble
+                    item={
+                      item.isOutgoing
+                        ? { ...item, status: outgoingStatusByEventId[item.eventId] || item.status || 'delivered' }
+                        : item
+                    }
+                    showSenderName={showSenderName}
+                  />
                 )}
 
                 {item.type === 'call' && (

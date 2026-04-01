@@ -62,9 +62,8 @@ export function useMatrixData() {
     client.on('Room.myMembership', updateData);
     client.on('RoomMember.membership', updateData);
     client.on('Room.timeline', updateData);
+    client.on('Room.receipt', updateData);
     client.on('Room', updateData);
-
-    const refreshInterval = setInterval(updateData, 2500);
 
     return () => {
       client.removeListener('sync', onSync);
@@ -73,8 +72,8 @@ export function useMatrixData() {
       client.removeListener('Room.myMembership', updateData);
       client.removeListener('RoomMember.membership', updateData);
       client.removeListener('Room.timeline', updateData);
+      client.removeListener('Room.receipt', updateData);
       client.removeListener('Room', updateData);
-      clearInterval(refreshInterval);
     };
   }, []);
 

@@ -14,7 +14,22 @@ function formatTime(timestamp) {
 
 function StatusIcon({ status }) {
   if (status === 'sending') return <ClockCircleOutlined style={{ fontSize: 11 }} />;
-  if (status === 'delivered') return <CheckOutlined style={{ fontSize: 11 }} />;
+  if (status === 'delivered') {
+    return (
+      <span className={styles.statusTicks} title="Delivered">
+        <CheckOutlined className={`${styles.tick} ${styles.tickFirst}`} />
+        <CheckOutlined className={`${styles.tick} ${styles.tickSecond}`} />
+      </span>
+    );
+  }
+  if (status === 'seen') {
+    return (
+      <span className={`${styles.statusTicks} ${styles.statusTicksSeen}`} title="Seen">
+        <CheckOutlined className={`${styles.tick} ${styles.tickFirst}`} />
+        <CheckOutlined className={`${styles.tick} ${styles.tickSecond}`} />
+      </span>
+    );
+  }
   if (status === 'failed') return <span style={{ color: '#f5222d', fontSize: 11 }}>!</span>;
   if (status === 'decrypting') return <ClockCircleOutlined style={{ fontSize: 11 }} />;
   if (status === 'decrypt_failed') return <span style={{ color: '#faad14', fontSize: 11 }}>⚠</span>;
