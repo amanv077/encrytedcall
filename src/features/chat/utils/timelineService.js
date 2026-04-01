@@ -120,6 +120,8 @@ export function normalizeMatrixEvent(event, myUserId) {
       isOutgoing,
       poll: {
         id: eventId,
+        roomId,
+        createdBy: sender,
         question,
         options,
         allowMultiple: maxSelections > 1,

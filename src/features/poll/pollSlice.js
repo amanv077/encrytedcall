@@ -47,14 +47,16 @@ const pollSlice = createSlice({
       if (!pollId || !userId || !answerId) return;
 
       const poll = state.polls[pollId];
-      if (!poll || poll.isClosed) return;
-
-      // Single-choice validation
-      const isKnownAnswer = poll.options.some((option) => option.id === answerId);
-      if (!isKnownAnswer) return;
+      if (poll?.isClosed) return;
 
       if (!state.votes[pollId]) {
         state.votes[pollId] = {};
+      }
+
+      // Validate known answer only if poll definition is available.
+      if (poll) {
+        const isKnownAnswer = poll.options.some((option) => option.id === answerId);
+        if (!isKnownAnswer) return;
       }
 
       // one vote per user (overwrite allowed)

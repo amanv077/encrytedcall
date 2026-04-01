@@ -277,6 +277,14 @@ const api = {
     });
   },
 
+  closePoll(pollId) {
+    if (!db || !pollId) return;
+    db.exec({
+      sql: `UPDATE polls SET is_closed = 1 WHERE poll_id = ?`,
+      bind: [pollId],
+    });
+  },
+
   getPollsByRoom(roomId) {
     if (!db || !roomId) return [];
     const rows = [];

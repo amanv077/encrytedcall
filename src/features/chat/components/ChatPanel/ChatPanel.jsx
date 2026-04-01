@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Spin, Typography, Empty, Input, Modal } from 'antd';
 import { LockOutlined, SearchOutlined, CloseOutlined } from '@ant-design/icons';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { storageService } from '../../utils/storageService';
 import { selectActiveRoomId } from '../../../../store/chatSlice';
 import { useChat } from '../../hooks/useChat';
 import { useTimeline } from '../../hooks/useTimeline';
 import { useRoomMembership } from '../../hooks/useRoomMembership';
 import { usePolls } from '../../hooks/usePolls';
+import { addPoll, addVote, endPoll } from '../../../poll/pollSlice';
+import { getPollsByRoom, getVotesByPoll } from '../../../poll/pollDb';
 import { roomService } from '../../utils/roomService';
 import { matrixManager } from '../../utils/matrixClient';
 import MessageBubble from '../MessageBubble/MessageBubble';
@@ -76,6 +78,7 @@ function _highlightTerm(text, term) {
  * @param {{ onPlaceCall: (roomId: string, isVideo: boolean) => void, isReady: boolean, msgSearchOpen: boolean, onCloseSearch: () => void }} props
  */
 export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onCloseSearch }) {
+  const dispatch = useDispatch();
   const roomId = useSelector(selectActiveRoomId);
   const membership = useRoomMembership(roomId);
   const { createPoll, creatingPoll } = usePolls();
@@ -93,6 +96,34 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [pollModalOpen, setPollModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!roomId || membership !== 'join') return undefined;
+    let cancelled = false;
+
+    const hydrateRoomPolls = async () => {
+      const polls = await getPollsByRoom(roomId);
+      if (cancelled || !Array.isArray(polls)) return;
+
+      for (let i = 0; i < polls.length; i += 1) {
+        const poll = polls[i];
+        dispatch(addPoll(poll));
+        const votes = await getVotesByPoll(poll.pollId);
+        if (cancelled || !Array.isArray(votes)) continue;
+        for (let j = 0; j < votes.length; j += 1) {
+          dispatch(addVote(votes[j]));
+        }
+        if (poll.isClosed) {
+          dispatch(endPoll({ pollId: poll.pollId, roomId }));
+        }
+      }
+    };
+
+    hydrateRoomPolls().catch(() => console.error('[ChatPanel] poll hydration failed'));
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, membership, roomId]);
 
   // Clear search state whenever the panel is closed or room changes
   useEffect(() => {

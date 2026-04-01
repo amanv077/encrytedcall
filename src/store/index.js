@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import chatReducer from './chatSlice';
 import uiReducer from './uiSlice';
+import pollReducer from '../features/poll/pollSlice';
 
 const store = configureStore({
   reducer: {
     chat: chatReducer,
     ui: uiReducer,
+    polls: pollReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
