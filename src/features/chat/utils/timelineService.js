@@ -155,6 +155,11 @@ export function normalizeMatrixEvent(event, myUserId) {
     };
   }
 
+  if (type === 'm.poll.response' || type === 'org.matrix.msc3381.poll.response') {
+    // Vote events update existing poll state only; never render as timeline item.
+    return null;
+  }
+
   // ── Quiz events ───────────────────────────────────────────────────────────
   if (type === 'com.app.quiz.start') {
     const question = typeof content.question === 'string' ? content.question.trim() : '';

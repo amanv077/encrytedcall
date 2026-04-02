@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Space, Typography } from 'antd';
+import { useSelector } from 'react-redux';
 import PollHeader from '../PollHeader/PollHeader';
 import PollOptions from '../PollOptions/PollOptions';
 import PollResults from '../PollResults/PollResults';
@@ -7,7 +8,7 @@ import PollFooter from '../PollFooter/PollFooter';
 import styles from './PollCard.module.scss';
 import { matrixManager } from '../../utils/matrixClient';
 import { usePolls } from '../../hooks/usePolls';
-import ReduxPollResults from '../../../poll/PollResults';
+import { getTotalVotes, getVoteCountByOption, getVotesByPoll } from '../../../poll/pollSlice';
 
 function computeTotalVotes(options) {
   return options.reduce((sum, option) => sum + (option.votes || 0), 0);
@@ -24,6 +25,9 @@ export default function PollCard({
   const client = matrixManager.getClient();
   const myUserId = client?.getUserId?.() || null;
   const roomId = poll?.roomId || poll?.roomIdOverride || null;
+  const voteCountByOption = useSelector((state) => (poll?.id ? getVoteCountByOption(state, poll.id) : {}));
+  const totalVotesFromStore = useSelector((state) => (poll?.id ? getTotalVotes(state, poll.id) : 0));
+  const votesByUser = useSelector((state) => (poll?.id ? getVotesByPoll(state, poll.id) : {}));
 
   const isCreator = Boolean(poll?.createdBy && myUserId && poll.createdBy === myUserId);
   const [selectedOptionIds, setSelectedOptionIds] = useState(poll?.myVotes || []);
@@ -32,10 +36,26 @@ export default function PollCard({
   const [optionsState, setOptionsState] = useState(poll?.options || []);
   const [voteError, setVoteError] = useState('');
 
-  const totalVotes = useMemo(() => computeTotalVotes(optionsState), [optionsState]);
+  const selectedFromStore = myUserId ? votesByUser[myUserId] : null;
+  const displayOptions = useMemo(
+    () =>
+      optionsState.map((option) => ({
+        ...option,
+        votes: voteCountByOption[option.id] ?? option.votes ?? 0,
+      })),
+    [optionsState, voteCountByOption],
+  );
+  const totalVotes = poll?.id ? totalVotesFromStore : computeTotalVotes(displayOptions);
   const isClosed = Boolean(poll?.closed);
   const disableSelection = isClosed || (lockAfterSubmit && submitted && !allowVoteChange);
   const status = isClosed ? 'closed' : submitted ? 'voted' : 'active';
+
+  useEffect(() => {
+    if (selectedFromStore) {
+      setSelectedOptionIds([selectedFromStore]);
+      setSubmitted(true);
+    }
+  }, [selectedFromStore]);
 
   const handleChange = (optionId, checked) => {
     if (disableSelection) return;
@@ -123,7 +143,7 @@ export default function PollCard({
 
         <div className={styles.optionsWrap}>
           <PollOptions
-            options={optionsState}
+            options={displayOptions}
             allowMultiple={poll.allowMultiple}
             selectedOptionIds={selectedOptionIds}
             disabled={disableSelection}
@@ -131,12 +151,10 @@ export default function PollCard({
           />
         </div>
 
-        {showResults && poll?.id ? (
-          <ReduxPollResults pollId={poll.id} />
-        ) : (
+        {showResults && (
           <PollResults
-            options={optionsState}
-            myVotes={selectedOptionIds}
+            options={displayOptions}
+            myVotes={selectedFromStore ? [selectedFromStore] : selectedOptionIds}
             totalVotes={totalVotes}
           />
         )}

@@ -3,7 +3,7 @@ import { Spin, Typography, Empty, Input, Modal } from 'antd';
 import { LockOutlined, SearchOutlined, CloseOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { storageService } from '../../utils/storageService';
-import { selectActiveRoomId } from '../../../../store/chatSlice';
+import { appendMessage, selectActiveRoomId } from '../../../../store/chatSlice';
 import { useChat } from '../../hooks/useChat';
 import { useTimeline } from '../../hooks/useTimeline';
 import { useRoomMembership } from '../../hooks/useRoomMembership';
@@ -104,6 +104,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const [receiptVersion, setReceiptVersion] = useState(0);
   const [quizModalOpen, setQuizModalOpen] = useState(false);
   const [quizAnswersByQuiz, setQuizAnswersByQuiz] = useState({});
+  const reduxVotes = useSelector((state) => state?.polls?.votes || {});
 
   useEffect(() => {
     if (!roomId || membership !== 'join') return undefined;
@@ -117,6 +118,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
         const poll = polls[i];
         dispatch(addPoll(poll));
         const votes = await getVotesByPoll(poll.pollId);
+        if (import.meta.env.DEV) console.log('DB Votes:', votes);
         if (cancelled || !Array.isArray(votes)) continue;
         for (let j = 0; j < votes.length; j += 1) {
           dispatch(addVote(votes[j]));
@@ -132,6 +134,10 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       cancelled = true;
     };
   }, [dispatch, membership, roomId]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) console.log('Redux Votes:', reduxVotes);
+  }, [reduxVotes]);
 
   // Clear search state whenever the panel is closed or room changes
   useEffect(() => {
@@ -261,12 +267,52 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const handleCreatePoll = useCallback(async (pollDraft) => {
     if (!roomId || !pollDraft) return;
     try {
-      await createPoll(roomId, pollDraft);
+      const res = await createPoll(roomId, pollDraft);
+      const eventId = res?.event_id || res?.eventId;
+      if (eventId) {
+        const client = matrixManager.getClient();
+        const sender = client?.getUserId?.() || 'me';
+        const senderName =
+          client?.getUser?.(sender)?.displayName ||
+          client?.getUser?.(sender)?.rawDisplayName ||
+          sender;
+        const options = (pollDraft.options || [])
+          .filter((o) => o?.label?.trim())
+          .map((o, idx) => ({
+            id: o.id || `opt_${idx + 1}`,
+            label: o.label.trim(),
+            votes: 0,
+          }));
+        dispatch(appendMessage({
+          roomId,
+          message: {
+            type: 'poll',
+            eventId,
+            roomId,
+            sender,
+            senderName,
+            timestamp: Date.now(),
+            isOutgoing: true,
+            poll: {
+              id: eventId,
+              roomId,
+              createdBy: sender,
+              question: (pollDraft.question || '').trim(),
+              options,
+              allowMultiple: Boolean(pollDraft.allowMultiple),
+              closed: false,
+              disableAfterSubmit: false,
+              allowVoteChange: true,
+              myVotes: [],
+            },
+          },
+        }));
+      }
       setPollModalOpen(false);
     } catch (err) {
       console.error('[ChatPanel] createPoll failed:', err);
     }
-  }, [createPoll, roomId]);
+  }, [createPoll, dispatch, roomId]);
 
   // Immediately mark opened conversation as read; keeps unread badge in sync.
   useEffect(() => {

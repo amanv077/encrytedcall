@@ -83,6 +83,7 @@ async function _initDb() {
   }
 
   _createSchema();
+  _migrateVotesTableIfNeeded();
 }
 
 function _createSchema() {
@@ -230,6 +231,63 @@ function _createSchema() {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+  `);
+}
+
+function _getTableColumns(tableName) {
+  const columns = [];
+  db.exec({
+    sql: `PRAGMA table_info(${tableName})`,
+    rowMode: 'object',
+    callback: (row) => {
+      if (row?.name) columns.push(row.name);
+    },
+  });
+  return columns;
+}
+
+function _migrateVotesTableIfNeeded() {
+  if (!db) return;
+
+  const columns = _getTableColumns('votes');
+  if (!columns.length) return;
+
+  const hasAnswerId = columns.includes('answer_id');
+  const hasUpdatedAt = columns.includes('updated_at');
+  if (hasAnswerId && hasUpdatedAt) return;
+
+  const answerExpr = hasAnswerId
+    ? 'answer_id'
+    : columns.includes('option_id')
+      ? 'option_id'
+      : 'NULL';
+  const updatedExpr = hasUpdatedAt
+    ? 'updated_at'
+    : columns.includes('timestamp')
+      ? 'timestamp'
+      : 'CAST(strftime(\'%s\',\'now\') AS INTEGER) * 1000';
+
+  db.exec(`
+    ALTER TABLE votes RENAME TO votes_legacy;
+
+    CREATE TABLE votes (
+      poll_id     TEXT NOT NULL,
+      user_id     TEXT NOT NULL,
+      answer_id   TEXT NOT NULL,
+      updated_at  INTEGER NOT NULL,
+      PRIMARY KEY (poll_id, user_id),
+      FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE
+    );
+
+    INSERT OR REPLACE INTO votes (poll_id, user_id, answer_id, updated_at)
+    SELECT poll_id, user_id, ${answerExpr}, ${updatedExpr}
+    FROM votes_legacy
+    WHERE ${answerExpr} IS NOT NULL;
+
+    DROP TABLE votes_legacy;
+
+    CREATE INDEX IF NOT EXISTS idx_votes_poll
+      ON votes(poll_id);
   `);
 }
 
