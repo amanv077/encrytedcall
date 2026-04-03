@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { matrixManager } from '../chat/utils/matrixClient';
 
 function assertRoomEncrypted(client, roomId) {
+  console.log('assertRoomEncryptedclient', client.isRoomEncrypted(roomId));
   if (typeof client?.isRoomEncrypted === 'function' && !client.isRoomEncrypted(roomId)) {
     throw new Error('Polls are allowed only in end-to-end encrypted rooms.');
   }
