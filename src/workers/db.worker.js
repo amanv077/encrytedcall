@@ -18,15 +18,105 @@
 
 import { expose } from 'comlink';
 
-// ── AES-GCM session key — lives ONLY in this worker's heap ──────────────────
+// ── AES-GCM session key lifecycle ─────────────────────────────────────────────
 let sessionKey = null;
+let sessionKeyUserId = null;
+const KEY_DB_NAME = 'synapp-local-crypto';
+const KEY_STORE_NAME = 'session_keys';
 
-async function _generateSessionKey() {
+function _openKeyDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(KEY_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const idb = req.result;
+      if (!idb.objectStoreNames.contains(KEY_STORE_NAME)) {
+        idb.createObjectStore(KEY_STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _readStoredKeyJwk(userId) {
+  if (!userId) return null;
+  const idb = await _openKeyDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = idb.transaction(KEY_STORE_NAME, 'readonly');
+      const store = tx.objectStore(KEY_STORE_NAME);
+      const req = store.get(userId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } finally {
+    idb.close();
+  }
+}
+
+async function _writeStoredKeyJwk(userId, jwk) {
+  if (!userId || !jwk) return;
+  const idb = await _openKeyDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = idb.transaction(KEY_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(KEY_STORE_NAME);
+      const req = store.put(jwk, userId);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } finally {
+    idb.close();
+  }
+}
+
+async function _deleteStoredKey(userId) {
+  if (!userId) return;
+  const idb = await _openKeyDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = idb.transaction(KEY_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(KEY_STORE_NAME);
+      const req = store.delete(userId);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } finally {
+    idb.close();
+  }
+}
+
+async function _generateSessionKey(userId) {
   sessionKey = await crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
-    false,                  // non-extractable — cannot leave worker memory
+    true,
     ['encrypt', 'decrypt'],
   );
+  sessionKeyUserId = userId || null;
+  if (userId) {
+    const jwk = await crypto.subtle.exportKey('jwk', sessionKey);
+    await _writeStoredKeyJwk(userId, jwk);
+  }
+}
+
+async function _loadPersistedSessionKey(userId) {
+  const jwk = await _readStoredKeyJwk(userId);
+  if (!jwk) return false;
+  try {
+    sessionKey = await crypto.subtle.importKey(
+      'jwk',
+      jwk,
+      { name: 'AES-GCM' },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    sessionKeyUserId = userId;
+    return true;
+  } catch (err) {
+    console.warn('[db.worker] Corrupted local key removed:', err);
+    await _deleteStoredKey(userId);
+    return false;
+  }
 }
 
 /**
@@ -62,6 +152,7 @@ async function _decrypt(stored) {
 
 function _destroySessionKey() {
   sessionKey = null;
+  sessionKeyUserId = null;
 }
 
 // ── SQLite database (OPFS-backed, worker-only) ───────────────────────────────
@@ -76,12 +167,18 @@ async function _initDb() {
     // OPFS sync-access-handle VFS — persistent, origin-isolated, worker-only
     db = new sqlite3.oo1.OpfsDb(DB_FILENAME);
     console.log('[db.worker] OPFS-backed SQLite ready');
-  } else {
+  } else if (sqlite3.oo1?.DB) {
     db = new sqlite3.oo1.DB(':memory:');
     console.warn('[db.worker] OPFS unavailable — using in-memory SQLite (non-persistent)');
+  } else {
+    // Some environments do not expose OO1 constructors at all.
+    // Keep login/session alive and run without local DB cache.
+    db = null;
+    console.warn('[db.worker] SQLite OO1 API unavailable — local DB disabled for this runtime');
+    return;
   }
 
-  _createSchema();
+  if (db) _createSchema();
 }
 
 function _createSchema() {
@@ -239,10 +336,40 @@ const api = {
    * A clean slate lets the Matrix SDK re-populate everything with the
    * new session key.
    */
-  async init() {
-    await _generateSessionKey();
+  async init(userId = null) {
     await _initDb();
-    api.clearMessageData(); // keep polls/votes persisted across reload
+    return api.initializeCrypto(userId);
+  },
+
+  async checkExistingKeys(userId) {
+    return !!(await _readStoredKeyJwk(userId));
+  },
+
+  clearLocalDatabase() {
+    api.clearMessageData();
+  },
+
+  async initializeCrypto(userId) {
+    const uid = userId || null;
+    const hadStoredKey = uid ? await api.checkExistingKeys(uid) : false;
+    const reused = uid ? await _loadPersistedSessionKey(uid) : false;
+
+    if (!reused) {
+      await _generateSessionKey(uid);
+    }
+
+    // Existing key expected but unavailable/corrupted => local DB rows are unreadable.
+    // Clear local message cache so app re-syncs from Matrix and re-encrypts with new key.
+    if (uid && hadStoredKey && !reused) {
+      api.clearMessageData();
+      return { reusedKey: false, keyStatus: 'missing_or_corrupted_recreated' };
+    }
+    if (uid && !hadStoredKey && !reused) {
+      // Fresh key for this user; if stale ciphertext exists, clear to avoid decrypt placeholders.
+      api.clearMessageData();
+      return { reusedKey: false, keyStatus: 'generated_new' };
+    }
+    return { reusedKey: reused, keyStatus: 'reused' };
   },
   savePoll(poll) {
     if (!db || !poll?.pollId || !poll?.roomId || !poll?.question) return;
@@ -561,6 +688,7 @@ const api = {
    * Called on logout AND on 30-minute idle timeout AND on remote-wipe signal.
    */
   async purge() {
+    const keyOwner = sessionKeyUserId;
     _destroySessionKey();
 
     if (db) {
@@ -576,6 +704,11 @@ const api = {
       console.log('[db.worker] OPFS database purged');
     } catch (err) {
       console.warn('[db.worker] OPFS purge error:', err);
+    }
+    try {
+      await _deleteStoredKey(keyOwner);
+    } catch (err) {
+      console.warn('[db.worker] local key purge error:', err);
     }
   },
 

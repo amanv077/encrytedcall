@@ -36,22 +36,32 @@ class StorageService {
   constructor() {
     this._ready = false;
     this._initPromise = null;
+    this._currentUserId = null;
   }
 
   /**
    * Initialise the worker: generate the AES-GCM session key and open the
    * OPFS SQLite database.  Safe to call multiple times — idempotent.
    */
-  async init() {
-    if (this._ready) return;
+  async init(userId = null) {
+    if (this._ready && this._currentUserId === (userId || null)) {
+      return { reusedKey: true, keyStatus: 'ready' };
+    }
     if (this._initPromise) return this._initPromise;
 
     this._initPromise = _getApi()
-      .init()
-      .then(() => { this._ready = true; })
+      .init(userId || null)
+      .then((res) => {
+        this._ready = true;
+        this._currentUserId = userId || null;
+        return res;
+      })
       .catch((err) => {
         console.error('[storageService] Worker init failed:', err);
+        this._ready = false;
+        this._currentUserId = null;
         this._initPromise = null;
+        throw err;
       });
 
     return this._initPromise;
@@ -59,6 +69,16 @@ class StorageService {
 
   /** true once the worker is ready to accept queries */
   get isReady() { return this._ready; }
+
+  async checkExistingKeys(userId) {
+    if (!userId) return false;
+    return _getApi().checkExistingKeys(userId);
+  }
+
+  async clearLocalDatabase() {
+    if (!this._ready) return;
+    return _getApi().clearLocalDatabase();
+  }
 
   // ── Write ──────────────────────────────────────────────────────────────────
 
@@ -198,6 +218,7 @@ class StorageService {
       _api = null;
     }
     this._initPromise = null;
+    this._currentUserId = null;
   }
 
   /** Destroy the session key only — in-memory wipe without touching the file. */

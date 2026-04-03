@@ -4,7 +4,6 @@ import { ConfigProvider, theme, Spin } from 'antd';
 import LoginPage from './features/auth/pages/LoginPage/LoginPage.jsx';
 import ChatLayout from './features/chat/components/ChatLayout/ChatLayout';
 import { matrixManager } from './features/chat/utils/matrixClient';
-import { storageService } from './features/chat/utils/storageService';
 import store from './store/index';
 import './shared/styles/global.scss';
 
@@ -19,9 +18,7 @@ function App() {
 
     const checkAuth = async () => {
       try {
-        // Init persistent storage before resuming session so that
-        // chatService can begin saving events immediately on sync.
-        await storageService.init();
+        // resumeSession() now initializes storage+crypto with key reuse checks.
         const client = await matrixManager.resumeSession();
         if (client) {
           setIsLoggedIn(true);

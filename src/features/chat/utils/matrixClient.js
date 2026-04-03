@@ -21,6 +21,7 @@ class MatrixClientManager {
     this._idleTimer     = null;
     this._idleResetBound = this._resetIdleTimer.bind(this);
     this._lastMarkedReadByRoom = new Map();
+    this._needsResyncAfterInit = false;
   }
 
   // ── Login / session ─────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ class MatrixClientManager {
       };
 
       this._saveSession(session);
+      await this.initializeCrypto(session.userId);
       return await this._startClient(session);
     } catch (error) {
       console.error('[MatrixClient] Login failed:', error);
@@ -81,6 +83,7 @@ class MatrixClientManager {
 
     try {
       this.isReady = false;
+      await this.initializeCrypto(session.userId);
       return await this._startClient(session);
     } catch (error) {
       console.error('[MatrixClient] Session resume failed:', error);
@@ -148,6 +151,10 @@ class MatrixClientManager {
           clearTimeout(timeout);
           this.isReady = true;
           await this._enableKeyBackup(this.client);
+          if (this._needsResyncAfterInit) {
+            this._needsResyncAfterInit = false;
+            await this.resyncMessages();
+          }
           this._startIdleTimer();
           resolve(this.client);
         }
@@ -284,8 +291,11 @@ class MatrixClientManager {
     }
     this._lastMarkedReadByRoom.clear();
 
-    // Wipe OPFS message history (GDPR — no plaintext on disk after logout)
-    try { await storageService.clearAll(); } catch (_) {}
+    // Keep local DB + persisted local key on normal sign-out.
+    // Only clear in-memory session key in the worker.
+    if (!fullWipe) {
+      try { storageService.destroySessionKey(); } catch (_) {}
+    }
 
     if (fullWipe) {
       // Full purge: also wipe the Rust crypto store (Olm/Megolm keys gone)
@@ -348,6 +358,38 @@ class MatrixClientManager {
   }
 
   getClient() { return this.client; }
+
+  // ── Modular key/db/session helpers ────────────────────────────────────────
+
+  async checkExistingKeys(userId) {
+    return storageService.checkExistingKeys(userId);
+  }
+
+  async clearLocalDatabase() {
+    return storageService.clearLocalDatabase();
+  }
+
+  async resyncMessages() {
+    const client = this.client;
+    if (!client) return;
+    const rooms = client.getRooms?.() || [];
+    await Promise.all(
+      rooms
+        .filter((room) => room.getMyMembership?.() === 'join')
+        .map(async (room) => {
+          try { await client.scrollback(room, 100); } catch (_) {}
+        }),
+    );
+  }
+
+  async initializeCrypto(userId) {
+    const result = await storageService.init(userId);
+    if (result?.keyStatus === 'missing_or_corrupted_recreated' || result?.keyStatus === 'generated_new') {
+      // Delay re-sync until client is started and PREPARED.
+      this._needsResyncAfterInit = true;
+    }
+    return result;
+  }
 
   /**
    * Ensure runtime client uses detached pending-event mode.
