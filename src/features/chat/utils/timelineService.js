@@ -99,6 +99,7 @@ export function normalizeMatrixEvent(event, myUserId) {
       isEncrypted: true,
       status: failed ? 'decrypt_failed' : 'decrypting',
       isDecryptionFailure: failed,
+      decryptError: failed ? 1 : 0,
     };
   }
 

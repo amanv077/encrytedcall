@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import {
   setMessages,
@@ -7,16 +7,17 @@ import {
   updateMessage,
   setLoading,
   setHasMore,
-  setSending,
   selectMessages,
   selectIsLoading,
   selectHasMore,
-  selectIsSending,
 } from '../../../store/chatSlice';
 import { chatService } from '../utils/chatService';
 import { storageService } from '../utils/storageService';
 
-const PAGE_SIZE = 50;
+/** Initial view: messages from the last 24h only, capped for a light first paint. */
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const INITIAL_WINDOW_LIMIT = 40;
+const LOAD_MORE_PAGE_SIZE = 35;
 
 /**
  * useChat – drives the chat state for the currently active room.
@@ -25,7 +26,6 @@ const PAGE_SIZE = 50;
  * @returns {{
  *   messages: TimelineItem[],
  *   isLoading: boolean,
- *   isSending: boolean,
  *   hasMore: boolean,
  *   sendMessage: (text: string) => Promise<void>,
  *   loadMore: () => Promise<void>,
@@ -39,28 +39,27 @@ export function useChat(roomId) {
   const msgSelector = useMemo(() => selectMessages(roomId), [roomId]);
   const loadingSelector = useMemo(() => selectIsLoading(roomId), [roomId]);
   const hasMoreSelector = useMemo(() => selectHasMore(roomId), [roomId]);
-  const sendingSelector = useMemo(() => selectIsSending(roomId), [roomId]);
 
   const messages = useSelector(msgSelector, shallowEqual);
   const isLoading = useSelector(loadingSelector);
   const hasMore = useSelector(hasMoreSelector);
-  const isSending = useSelector(sendingSelector);
-
-  // Track how many messages we've already loaded so loadMore can offset correctly
-  const loadedCountRef = useRef(0);
 
   // ── Initial load when room changes ─────────────────────────────────────────
   useEffect(() => {
     if (!roomId) return;
 
-    loadedCountRef.current = 0;
-
     const loadInitial = async () => {
       dispatch(setLoading({ roomId, loading: true }));
 
-      // 1. Try local SQLite first (fast) — must await, worker is async
+      const minTs = Date.now() - ONE_DAY_MS;
+
+      // 1. SQLite: newest chunk within the last 24h only (lazy older on scroll).
       let items = storageService.isReady
-        ? await storageService.getMessages(roomId, PAGE_SIZE, 0)
+        ? await storageService.getRecentMessagesSince(
+            roomId,
+            minTs,
+            INITIAL_WINDOW_LIMIT,
+          )
         : [];
 
       // If every item has an empty body the rows were encrypted with a
@@ -69,21 +68,46 @@ export function useChat(roomId) {
       const hasUsableContent = items.some((m) => m.body && m.body.trim().length > 0);
       if (!hasUsableContent) items = [];
 
-      // 2. If SQLite has nothing, hydrate from the Matrix SDK's in-memory timeline
+      // 2. In-memory Matrix timeline (same 24h window + cap).
       if (items.length === 0) {
-        items = chatService.getInMemoryTimeline(roomId);
-        // Persist so FTS5 is populated for search this session
+        items = chatService.getRecentInMemoryTimeline(
+          roomId,
+          minTs,
+          INITIAL_WINDOW_LIMIT,
+        );
         items.forEach((item) => storageService.saveEvent(item));
       }
 
-      // 3. If still nothing, fetch from homeserver
+      // 3. Homeserver until the window has something or scrollback stops.
       if (items.length === 0) {
-        items = await chatService.fetchRoomHistory(roomId, PAGE_SIZE);
+        items = await chatService.fetchRecentRoomHistory(
+          roomId,
+          minTs,
+          INITIAL_WINDOW_LIMIT,
+        );
+      }
+
+      // 4. Nothing in the last 24h — show the newest page anyway so the thread isn't blank.
+      if (items.length === 0 && storageService.isReady) {
+        items = await storageService.getLatestMessages(roomId, INITIAL_WINDOW_LIMIT);
+        const ok = items.some((m) => m.body && m.body.trim().length > 0);
+        if (!ok) items = [];
+      }
+      if (items.length === 0) {
+        items = chatService.getLatestInMemoryTimeline(roomId, INITIAL_WINDOW_LIMIT);
+        items.forEach((item) => storageService.saveEvent(item));
+      }
+      if (items.length === 0) {
+        const full = await chatService.fetchRoomHistory(roomId, Math.max(50, INITIAL_WINDOW_LIMIT));
+        if (full.length > INITIAL_WINDOW_LIMIT) {
+          items = full.slice(-INITIAL_WINDOW_LIMIT);
+        } else {
+          items = full;
+        }
       }
 
       dispatch(setMessages({ roomId, messages: items }));
-      dispatch(setHasMore({ roomId, hasMore: items.length >= PAGE_SIZE }));
-      loadedCountRef.current = items.length;
+      dispatch(setHasMore({ roomId, hasMore: items.length > 0 }));
       dispatch(setLoading({ roomId, loading: false }));
     };
 
@@ -103,7 +127,6 @@ export function useChat(roomId) {
         dispatch(updateMessage({ roomId, tempId: item.eventId, message: item }));
       } else {
         dispatch(appendMessage({ roomId, message: item }));
-        loadedCountRef.current += 1;
       }
     });
 
@@ -114,8 +137,6 @@ export function useChat(roomId) {
   const sendMessage = useCallback(
     async (text) => {
       if (!roomId || !text?.trim()) return;
-
-      dispatch(setSending({ roomId, sending: true }));
 
       // Optimistic local echo
       const tempId = `local-echo-${Date.now()}`;
@@ -154,8 +175,6 @@ export function useChat(roomId) {
             message: { ...echoItem, status: 'failed' },
           }),
         );
-      } finally {
-        dispatch(setSending({ roomId, sending: false }));
       }
     },
     [roomId, dispatch],
@@ -165,31 +184,43 @@ export function useChat(roomId) {
   const loadMore = useCallback(async () => {
     if (!roomId || isLoading || !hasMore) return;
 
+    const oldest = messages[0];
+    const oldestTs = oldest?.timestamp;
+    if (oldestTs == null) {
+      dispatch(setHasMore({ roomId, hasMore: false }));
+      return;
+    }
+
     dispatch(setLoading({ roomId, loading: true }));
 
-    const offset = loadedCountRef.current;
+    const existingIds = new Set(messages.map((m) => m.eventId));
 
-    // Try SQLite first — must await, worker is async
     let older = storageService.isReady
-      ? await storageService.getMessages(roomId, PAGE_SIZE, offset)
+      ? await storageService.getMessagesOlderThan(
+          roomId,
+          oldestTs,
+          LOAD_MORE_PAGE_SIZE,
+        )
       : [];
 
-    // If SQLite doesn't have older messages, fetch from homeserver
+    older = older.filter((m) => m.eventId && !existingIds.has(m.eventId));
+
     if (older.length === 0) {
-      older = await chatService.fetchRoomHistory(roomId, PAGE_SIZE);
-      // fetchRoomHistory returns the full in-memory timeline, so deduplicate
-      const existingIds = new Set(messages.map((m) => m.eventId));
-      older = older.filter((m) => !existingIds.has(m.eventId));
+      older = await chatService.fetchOlderMessages(
+        roomId,
+        oldestTs,
+        LOAD_MORE_PAGE_SIZE,
+        existingIds,
+      );
     }
 
     if (older.length > 0) {
       dispatch(prependMessages({ roomId, messages: older }));
-      loadedCountRef.current += older.length;
     }
 
-    dispatch(setHasMore({ roomId, hasMore: older.length >= PAGE_SIZE }));
+    dispatch(setHasMore({ roomId, hasMore: older.length >= LOAD_MORE_PAGE_SIZE }));
     dispatch(setLoading({ roomId, loading: false }));
   }, [roomId, isLoading, hasMore, messages, dispatch]);
 
-  return { messages, isLoading, isSending, hasMore, sendMessage, loadMore };
+  return { messages, isLoading, hasMore, sendMessage, loadMore };
 }

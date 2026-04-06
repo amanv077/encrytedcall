@@ -117,6 +117,24 @@ class StorageService {
     return _getApi().getMessages(roomId, limit, offset);
   }
 
+  /** Last `limit` messages with timestamp >= minTs, chronological order. */
+  async getRecentMessagesSince(roomId, minTs, limit = 40) {
+    if (!this._ready) return [];
+    return _getApi().getRecentMessagesSince(roomId, minTs, limit);
+  }
+
+  /** Up to `limit` messages strictly older than beforeTs, chronological order. */
+  async getMessagesOlderThan(roomId, beforeTs, limit = 35) {
+    if (!this._ready) return [];
+    return _getApi().getMessagesOlderThan(roomId, beforeTs, limit);
+  }
+
+  /** Newest `limit` messages, chronological order. */
+  async getLatestMessages(roomId, limit = 40) {
+    if (!this._ready) return [];
+    return _getApi().getLatestMessages(roomId, limit);
+  }
+
   /**
    * FTS5 full-text search — 100 % local, BM25-ranked, prefix-aware.
    * Returns items with an extra `highlight` field containing the snippet.
@@ -228,6 +246,16 @@ class StorageService {
   destroySessionKey() {
     if (!this._ready) return;
     _getApi().destroySessionKey().catch(console.error);
+  }
+
+  /**
+   * Compare stored user hash to current Matrix user id; purge local messages if it changed.
+   * Call after Matrix crypto is ready and before syncing to SQLite.
+   */
+  async ensureUserIdentity(userId) {
+    if (!userId) return;
+    if (!this._ready) await this.init();
+    return _getApi().ensureUserIdentity(userId);
   }
 }
 

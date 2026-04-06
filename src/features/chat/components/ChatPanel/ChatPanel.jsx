@@ -88,7 +88,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const { createPoll, creatingPoll } = usePolls();
   const { createQuiz, creatingQuiz, answerQuiz } = useQuizs();
 
-  const { isLoading, isSending, hasMore, sendMessage, loadMore } = useChat(roomId);
+  const { isLoading, hasMore, sendMessage, loadMore } = useChat(roomId);
   const timeline = useTimeline(roomId);
 
   const bottomRef = useRef(null);
@@ -567,7 +567,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       {/* Message input – only shown when actually joined */}
       <MessageInput
         onSend={sendMessage}
-        disabled={!isReady || isSending || !roomId}
+        disabled={!isReady || !roomId}
         isEncrypted={isEncrypted}
         onActionClick={handleActionClick}
       />

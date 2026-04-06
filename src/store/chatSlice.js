@@ -8,6 +8,10 @@ const chatSlice = createSlice({
     loadingByRoom: {},    // { [roomId]: boolean }
     hasMoreByRoom: {},    // { [roomId]: boolean }
     sendingByRoom: {},    // { [roomId]: boolean }
+    cryptoReady: false,
+    needsRecoveryKey: false,
+    recoveryKeyForDisplay: null,
+    verificationStatus: null,
   },
   reducers: {
     setActiveRoom(state, action) {
@@ -83,6 +87,27 @@ const chatSlice = createSlice({
       delete state.hasMoreByRoom[roomId];
       delete state.sendingByRoom[roomId];
     },
+    setCryptoReady(state, action) {
+      state.cryptoReady = action.payload;
+    },
+    setNeedsRecoveryKey(state, action) {
+      state.needsRecoveryKey = action.payload;
+    },
+    setRecoveryKeyForDisplay(state, action) {
+      state.recoveryKeyForDisplay = action.payload;
+    },
+    clearRecoveryKeyForDisplay(state) {
+      state.recoveryKeyForDisplay = null;
+    },
+    setVerificationStatus(state, action) {
+      state.verificationStatus = action.payload;
+    },
+    resetCryptoSessionState(state) {
+      state.cryptoReady = false;
+      state.needsRecoveryKey = false;
+      state.recoveryKeyForDisplay = null;
+      state.verificationStatus = null;
+    },
   },
 });
 
@@ -96,6 +121,12 @@ export const {
   setHasMore,
   setSending,
   clearRoom,
+  setCryptoReady,
+  setNeedsRecoveryKey,
+  setRecoveryKeyForDisplay,
+  clearRecoveryKeyForDisplay,
+  setVerificationStatus,
+  resetCryptoSessionState,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;
@@ -112,3 +143,6 @@ export const selectIsSending = (roomId) => (state) =>
   state.chat.sendingByRoom[roomId] || false;
 /** All loaded messages keyed by roomId — used for cross-room in-memory search. */
 export const selectAllMessagesByRoom = (state) => state.chat.messagesByRoom;
+export const selectCryptoReady = (state) => state.chat.cryptoReady;
+export const selectNeedsRecoveryKey = (state) => state.chat.needsRecoveryKey;
+export const selectRecoveryKeyForDisplay = (state) => state.chat.recoveryKeyForDisplay;

@@ -11,6 +11,7 @@ import './shared/styles/global.scss';
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionAwaitingRecovery, setSessionAwaitingRecovery] = useState(false);
   const authAttempted = useRef(false);
 
   useEffect(() => {
@@ -19,15 +20,15 @@ function App() {
 
     const checkAuth = async () => {
       try {
-        // Init persistent storage before resuming session so that
-        // chatService can begin saving events immediately on sync.
         await storageService.init();
-        const client = await matrixManager.resumeSession();
-        if (client) {
+        const result = await matrixManager.resumeSession();
+        if (result?.needsRecoveryKey) {
+          setSessionAwaitingRecovery(true);
+        } else if (matrixManager.getClient() && matrixManager.isReady) {
           setIsLoggedIn(true);
         }
       } catch (e) {
-        console.error("Auto-auth failed", e);
+        console.error('Auto-auth failed', e);
       } finally {
         setLoading(false);
       }
@@ -36,9 +37,14 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    // storageService.clearAll() is called inside matrixManager.logout()
     await matrixManager.logout();
     setIsLoggedIn(false);
+    setSessionAwaitingRecovery(false);
+  };
+
+  const handleLoginSuccess = () => {
+    setSessionAwaitingRecovery(false);
+    setIsLoggedIn(true);
   };
 
   const antdThemeConfig = {
@@ -62,7 +68,10 @@ function App() {
         ) : isLoggedIn ? (
           <ChatLayout onLogout={handleLogout} />
         ) : (
-          <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
+          <LoginPage
+            sessionAwaitingRecovery={sessionAwaitingRecovery}
+            onLoginSuccess={handleLoginSuccess}
+          />
         )}
       </div>
     </ConfigProvider>

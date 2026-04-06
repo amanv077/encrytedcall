@@ -71,9 +71,18 @@ let db = null;
 
 async function _initDb() {
   const sqlite3InitModule = (await import('@sqlite.org/sqlite-wasm')).default;
-  const sqlite3 = await sqlite3InitModule({ print: () => {}, printErr: console.error });
+  const emscriptenModule = await sqlite3InitModule({ print: () => {}, printErr: console.error });
+  // In dedicated workers, the bundler-friendly build returns the Emscripten module first;
+  // oo1 is only attached after asyncPostInit() (see sqlite3-bundler-friendly.mjs).
+  let sqlite3 = emscriptenModule.sqlite3 || emscriptenModule;
+  if (sqlite3?.asyncPostInit) {
+    sqlite3 = await sqlite3.asyncPostInit();
+  }
+  if (!sqlite3?.oo1?.DB) {
+    throw new Error('[db.worker] sqlite3.oo1 API missing after init (cannot open database)');
+  }
 
-  if (sqlite3.oo1?.OpfsDb) {
+  if (sqlite3.oo1.OpfsDb) {
     // OPFS sync-access-handle VFS — persistent, origin-isolated, worker-only
     db = new sqlite3.oo1.OpfsDb(DB_URI);
     console.log('[db.worker] OPFS-backed SQLite ready');
@@ -84,6 +93,7 @@ async function _initDb() {
 
   _createSchema();
   _migrateVotesTableIfNeeded();
+  _migrateDecryptErrorColumnIfNeeded();
 }
 
 function _createSchema() {
@@ -246,6 +256,27 @@ function _getTableColumns(tableName) {
   return columns;
 }
 
+function _migrateDecryptErrorColumnIfNeeded() {
+  if (!db) return;
+  const columns = _getTableColumns('messages');
+  if (!columns.length) return;
+  if (columns.includes('decrypt_error')) return;
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN decrypt_error INTEGER NOT NULL DEFAULT 0`);
+  } catch (err) {
+    console.warn('[db.worker] decrypt_error migration:', err);
+  }
+}
+
+async function _hashUserId(userId) {
+  if (!userId) return '';
+  const encoded = new TextEncoder().encode(userId);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function _migrateVotesTableIfNeeded() {
   if (!db) return;
 
@@ -307,6 +338,7 @@ async function _rowToItem(row, decryptedBody) {
     callType:    row.call_type    || undefined,
     outcome:     row.call_outcome || undefined,
     status:      'delivered',
+    decryptError: row.decrypt_error === 1 ? 1 : 0,
   };
 }
 
@@ -503,12 +535,14 @@ const api = {
 
     const bodyEnc = await _encrypt(item.body || '');
 
+    const decryptErr = Number(item.decryptError) === 1 ? 1 : 0;
+
     db.exec({
       sql: `INSERT OR REPLACE INTO messages
             (id, room_id, sender, sender_name, msg_type,
              body_enc, body_plain, origin_ts,
-             edited_event, redacted, synced)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+             edited_event, redacted, synced, decrypt_error)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       bind: [
         id,
         item.roomId,
@@ -521,6 +555,7 @@ const api = {
         item.editedEventId || null,
         item.redacted ? 1 : 0,
         1,
+        decryptErr,
       ],
     });
 
@@ -548,6 +583,70 @@ const api = {
       rowMode: 'object',
       callback: (row) => rows.push(row),
     });
+    return Promise.all(
+      rows.map(async (row) => _rowToItem(row, await _decrypt(row.body_enc))),
+    );
+  },
+
+  /**
+   * Newest messages in a room with origin_ts >= minTs, capped at limit.
+   * Returned oldest-first (chronological) for the UI timeline.
+   */
+  async getRecentMessagesSince(roomId, minTs, limit = 40) {
+    if (!db) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT * FROM messages
+            WHERE room_id = ? AND redacted = 0 AND origin_ts >= ?
+            ORDER BY origin_ts DESC
+            LIMIT ?`,
+      bind: [roomId, minTs, limit],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    rows.reverse();
+    return Promise.all(
+      rows.map(async (row) => _rowToItem(row, await _decrypt(row.body_enc))),
+    );
+  },
+
+  /**
+   * Page of messages strictly older than beforeTs (by origin_ts), newest-first query then reversed → chronological batch.
+   */
+  async getMessagesOlderThan(roomId, beforeTs, limit = 35) {
+    if (!db || beforeTs == null) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT * FROM messages
+            WHERE room_id = ? AND redacted = 0 AND origin_ts < ?
+            ORDER BY origin_ts DESC
+            LIMIT ?`,
+      bind: [roomId, beforeTs, limit],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    rows.reverse();
+    return Promise.all(
+      rows.map(async (row) => _rowToItem(row, await _decrypt(row.body_enc))),
+    );
+  },
+
+  /**
+   * Newest `limit` messages in the room (chronological order).
+   */
+  async getLatestMessages(roomId, limit = 40) {
+    if (!db) return [];
+    const rows = [];
+    db.exec({
+      sql: `SELECT * FROM messages
+            WHERE room_id = ? AND redacted = 0
+            ORDER BY origin_ts DESC
+            LIMIT ?`,
+      bind: [roomId, limit],
+      rowMode: 'object',
+      callback: (row) => rows.push(row),
+    });
+    rows.reverse();
     return Promise.all(
       rows.map(async (row) => _rowToItem(row, await _decrypt(row.body_enc))),
     );
@@ -639,7 +738,7 @@ const api = {
       // Set body_plain = newBody so the messages_au FTS trigger fires correctly,
       // then clear it in the follow-up UPDATE.
       sql: `UPDATE messages
-            SET body_enc = ?, body_plain = ?, edited_event = id
+            SET body_enc = ?, body_plain = ?, edited_event = id, decrypt_error = 0
             WHERE id = ?`,
       bind: [bodyEnc, newBody, eventId],
     });
@@ -669,6 +768,51 @@ const api = {
       callback: (row) => { token = row.value; },
     });
     return token;
+  },
+
+  getSyncState(key) {
+    if (!db || !key) return null;
+    let value = null;
+    db.exec({
+      sql: `SELECT value FROM sync_state WHERE key = ?`,
+      bind: [key],
+      rowMode: 'object',
+      callback: (row) => { value = row.value; },
+    });
+    return value;
+  },
+
+  setSyncState(key, value) {
+    if (!db || !key) return;
+    db.exec({
+      sql: `INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)`,
+      bind: [key, String(value)],
+    });
+  },
+
+  async hashUserId(userId) {
+    return _hashUserId(userId);
+  },
+
+  /**
+   * If the logged-in user changed, wipe message rows (encrypted with wrong key / wrong user).
+   */
+  async ensureUserIdentity(userId) {
+    if (!db || !userId) return;
+    const hash = await _hashUserId(userId);
+    let stored = null;
+    db.exec({
+      sql: `SELECT value FROM sync_state WHERE key = 'user_identity_hash'`,
+      rowMode: 'object',
+      callback: (row) => { stored = row.value; },
+    });
+    if (stored && stored !== hash) {
+      api.clearMessageData();
+    }
+    db.exec({
+      sql: `INSERT OR REPLACE INTO sync_state (key, value) VALUES ('user_identity_hash', ?)`,
+      bind: [hash],
+    });
   },
 
   countMessages(roomId) {
@@ -727,7 +871,11 @@ const api = {
     _destroySessionKey();
 
     if (db) {
-      try { db.close(); } catch (_) {}
+      try {
+        db.close();
+      } catch {
+        /* ignore */
+      }
       db = null;
     }
 

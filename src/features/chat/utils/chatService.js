@@ -3,6 +3,18 @@ import { normalizeMatrixEvent } from './timelineService';
 import { storageService } from './storageService';
 
 /**
+ * Keep up to maxCount messages whose timestamp falls in [minTs, ∞), chronological.
+ * If there are more than maxCount, keep the maxCount newest within the window.
+ */
+function takeRecentWithinWindow(items, minTs, maxCount) {
+  const filtered = items
+    .filter((m) => (m.timestamp ?? 0) >= minTs)
+    .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+  if (filtered.length <= maxCount) return filtered;
+  return filtered.slice(-maxCount);
+}
+
+/**
  * chatService – Matrix text messaging layer.
  *
  * Responsibilities:
@@ -32,6 +44,7 @@ class ChatService {
     this._removeListeners(client);
 
     this._timelineHandler = (event, room, toStartOfTimeline) => {
+      if (!matrixManager.isCryptoReadyForTimelinePersistence()) return;
       // Skip historical events loaded during initial sync
       if (toStartOfTimeline) return;
 
@@ -76,6 +89,7 @@ class ChatService {
     // permanent failure (isDecryptionFailure() returns true).  In both cases
     // we want to UPDATE the existing placeholder rather than append a duplicate.
     this._decryptedHandler = (event) => {
+      if (!matrixManager.isCryptoReadyForTimelinePersistence()) return;
       this._handleEvent(event, true);
     };
 
@@ -106,6 +120,7 @@ class ChatService {
    *   subscriber should REPLACE an existing item rather than append a new one.
    */
   _handleEvent(event, isUpdate) {
+    if (!matrixManager.isCryptoReadyForTimelinePersistence()) return;
     const client = matrixManager.getClient();
     if (!client) return;
     const myUserId = client.getUserId();
@@ -216,6 +231,107 @@ class ChatService {
     const events = room.getLiveTimeline?.()?.getEvents?.() || [];
 
     return events.map((evt) => normalizeMatrixEvent(evt, myUserId)).filter(Boolean);
+  }
+
+  /**
+   * In-memory timeline: up to maxCount newest messages with ts >= minTs.
+   */
+  getRecentInMemoryTimeline(roomId, minTs, maxCount) {
+    const items = this.getInMemoryTimeline(roomId);
+    return takeRecentWithinWindow(items, minTs, maxCount);
+  }
+
+  /**
+   * Hydrate from the server until some messages fall in [minTs, ∞) or scrollback stalls.
+   */
+  async fetchRecentRoomHistory(roomId, minTs, maxCount) {
+    const client = matrixManager.getClient();
+    if (!client) return [];
+
+    const room = client.getRoom(roomId);
+    if (!room) return [];
+
+    const myUserId = client.getUserId();
+    let prevTimelineLen = -1;
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const timeline = room.getLiveTimeline?.()?.getEvents?.() || [];
+      const items = timeline
+        .map((evt) => normalizeMatrixEvent(evt, myUserId))
+        .filter(Boolean);
+
+      items.forEach((item) => storageService.saveEvent(item));
+
+      const recent = takeRecentWithinWindow(items, minTs, maxCount);
+      if (recent.length > 0) return recent;
+
+      if (attempt > 0 && timeline.length === prevTimelineLen) break;
+      prevTimelineLen = timeline.length;
+
+      try {
+        await client.scrollback(room, Math.max(40, maxCount));
+      } catch (err) {
+        console.warn('[chatService] fetchRecentRoomHistory scrollback:', err);
+        break;
+      }
+    }
+
+    return [];
+  }
+
+  /**
+   * Most recent `maxCount` messages from the live timeline (any age). Used when
+   * the 24h window is empty but the room still has history.
+   */
+  getLatestInMemoryTimeline(roomId, maxCount) {
+    const items = this.getInMemoryTimeline(roomId);
+    if (items.length <= maxCount) return items;
+    return items.slice(-maxCount);
+  }
+
+  /**
+   * Messages strictly older than oldestTs, excluding ids already in the UI.
+   */
+  async fetchOlderMessages(roomId, oldestTs, limit, excludeIds) {
+    const client = matrixManager.getClient();
+    if (!client) return [];
+
+    const room = client.getRoom(roomId);
+    if (!room) return [];
+
+    const myUserId = client.getUserId();
+    let prevTimelineLen = -1;
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const timeline = room.getLiveTimeline?.()?.getEvents?.() || [];
+      const items = timeline
+        .map((evt) => normalizeMatrixEvent(evt, myUserId))
+        .filter(Boolean);
+
+      items.forEach((item) => storageService.saveEvent(item));
+
+      const candidates = items.filter(
+        (m) =>
+          (m.timestamp ?? 0) < oldestTs &&
+          m.eventId &&
+          !excludeIds.has(m.eventId),
+      );
+      candidates.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+      const batch = candidates.slice(0, limit).reverse();
+      if (batch.length > 0) return batch;
+
+      if (attempt > 0 && timeline.length === prevTimelineLen) break;
+      prevTimelineLen = timeline.length;
+
+      try {
+        await client.scrollback(room, limit);
+      } catch (err) {
+        console.warn('[chatService] fetchOlderMessages scrollback:', err);
+        break;
+      }
+    }
+
+    return [];
   }
 }
 
