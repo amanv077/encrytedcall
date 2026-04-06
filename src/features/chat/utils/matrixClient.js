@@ -14,18 +14,18 @@ const PENDING_EVENT_ORDERING = 'detached';
 
 class MatrixClientManager {
   constructor() {
-    this.client         = null;
-    this.isReady        = false;
-    this.isLoggingIn    = false;
+    this.client = null;
+    this.isReady = false;
+    this.isLoggingIn = false;
     this._usingRustCrypto = false;
-    this._idleTimer     = null;
+    this._idleTimer = null;
     this._idleResetBound = this._resetIdleTimer.bind(this);
     this._lastMarkedReadByRoom = new Map();
   }
 
   // ── Login / session ─────────────────────────────────────────────────────
 
-  async login(baseUrl, userId, password) {
+  async login(baseUrl, userId, password, deviceId, accessToken) {
     if (this.isLoggingIn) return;
     this.isLoggingIn = true;
 
@@ -41,14 +41,14 @@ class MatrixClientManager {
       // homeserver re-registers the same device and the Rust crypto store
       // (IndexedDB) — which is preserved across normal logouts — still holds
       // the correct Olm/Megolm session keys for that device.
-      const savedUserId   = localStorage.getItem('matrix_user_id');
+      const savedUserId = localStorage.getItem('matrix_user_id');
       const savedDeviceId = localStorage.getItem('matrix_device_id');
       const reuseDeviceId =
         savedUserId === userId && savedDeviceId ? savedDeviceId : undefined;
 
       const loginRes = await tempClient.login('m.login.password', {
-        user:                        userId,
-        password:                    password,
+        user: userId,
+        password: password,
         // user:                        "@rajhanani04:matrix.org",
         // password:                    "12345678",
         initial_device_display_name: 'Healthcare Web Portal',
@@ -57,10 +57,14 @@ class MatrixClientManager {
 
       const session = {
         baseUrl,
-        userId:      loginRes.user_id,
+        userId: loginRes.user_id,
         accessToken: loginRes.access_token,
-        deviceId:    loginRes.device_id,
+        // accessToken:accessToken,
+        deviceId: loginRes.device_id,
+        // deviceId: deviceId,
       };
+
+      console.log('session', session);
 
       this._saveSession(session);
       return await this._startClient(session);
@@ -189,7 +193,7 @@ class MatrixClientManager {
       // Re-request keys for any failed decryptions via key gossiping
       client.on('Event.decrypted', (event) => {
         if (event.isDecryptionFailure()) {
-          try { client.cancelAndResendEventRoomKeyRequest(event, true); } catch (_) {}
+          try { client.cancelAndResendEventRoomKeyRequest(event, true); } catch (_) { }
         }
       });
     } catch (err) {
@@ -278,18 +282,18 @@ class MatrixClientManager {
     chatService.disposeListeners();
 
     if (client) {
-      try { await client.logout(); } catch (_) {}
+      try { await client.logout(); } catch (_) { }
       client.stopClient();
       this.client = null;
     }
     this._lastMarkedReadByRoom.clear();
 
     // Wipe OPFS message history (GDPR — no plaintext on disk after logout)
-    try { await storageService.clearAll(); } catch (_) {}
+    try { await storageService.clearAll(); } catch (_) { }
 
     if (fullWipe) {
       // Full purge: also wipe the Rust crypto store (Olm/Megolm keys gone)
-      try { window.indexedDB.deleteDatabase('matrix-js-sdk:crypto'); } catch (_) {}
+      try { window.indexedDB.deleteDatabase('matrix-js-sdk:crypto'); } catch (_) { }
     }
     // Normal logout intentionally keeps the IndexedDB so that the next
     // login with the same device_id can still decrypt historical messages.
@@ -298,17 +302,17 @@ class MatrixClientManager {
   // ── Session persistence (access token only — NOT message data) ──────────
 
   _saveSession(session) {
-    localStorage.setItem('matrix_base_url',    session.baseUrl);
-    localStorage.setItem('matrix_user_id',     session.userId);
+    localStorage.setItem('matrix_base_url', session.baseUrl);
+    localStorage.setItem('matrix_user_id', session.userId);
     localStorage.setItem('matrix_access_token', session.accessToken);
-    localStorage.setItem('matrix_device_id',   session.deviceId);
+    localStorage.setItem('matrix_device_id', session.deviceId);
   }
 
   _loadSession() {
-    const baseUrl      = localStorage.getItem('matrix_base_url');
-    const userId       = localStorage.getItem('matrix_user_id');
-    const accessToken  = localStorage.getItem('matrix_access_token');
-    const deviceId     = localStorage.getItem('matrix_device_id');
+    const baseUrl = localStorage.getItem('matrix_base_url');
+    const userId = localStorage.getItem('matrix_user_id');
+    const accessToken = localStorage.getItem('matrix_access_token');
+    const deviceId = localStorage.getItem('matrix_device_id');
     return baseUrl && userId && accessToken
       ? { baseUrl, userId, accessToken, deviceId }
       : null;
@@ -367,7 +371,7 @@ class MatrixClientManager {
     try {
       chatService.disposeListeners();
       current.stopClient();
-    } catch (_) {}
+    } catch (_) { }
 
     this.client = null;
     this.isReady = false;

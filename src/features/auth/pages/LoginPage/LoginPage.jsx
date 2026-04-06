@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons';
 import { matrixManager } from '../../../chat/utils/matrixClient';
 import styles from './LoginPage.module.scss';
-
+import axios from 'axios';
 const { Title, Text } = Typography;
 
 const FEATURES = [
@@ -33,15 +33,24 @@ const FEATURES = [
 
 export default function LoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [form]                = Form.useForm();
+  const [error, setError] = useState('');
+  const [form] = Form.useForm();
 
   const handleLogin = async (values) => {
     setLoading(true);
     setError('');
     const baseUrl = import.meta.env.VITE_MATRIX_BASE_URL || 'https://matrix.org';
     try {
-      await matrixManager.login(baseUrl, values.userId, values.password);
+      // const loginResponse = await axios.post("https://glary-xiomara-stupefactive.ngrok-free.dev/api/auth/login1", {
+      //   "username": values.userId,
+      //   "password": values.password
+      // });
+
+      // console.log('loginResponse', loginResponse);
+      await matrixManager.login("http://172.16.7.246:8008", values.userId, values.password);
+      // await matrixManager.login("https://glary-xiomara-stupefactive.ngrok-free.dev", loginResponse.data.userId, loginResponse.data.password,loginResponse.data.deviceId,loginResponse.data.accessToken);
+
+
       onLoginSuccess();
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');

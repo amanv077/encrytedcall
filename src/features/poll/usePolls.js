@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { matrixManager } from '../chat/utils/matrixClient';
+import axios from 'axios';
+
 
 function assertRoomEncrypted(client, roomId) {
   console.log('assertRoomEncryptedclient', client.isRoomEncrypted(roomId));
@@ -23,6 +25,7 @@ export function usePolls() {
     const client =
       (await matrixManager.ensureDetachedPendingEvents?.()) ||
       matrixManager.getClient();
+      console.log('client', client);
     if (!client) throw new Error('Matrix client not initialized.');
     assertRoomEncrypted(client, roomId);
 
@@ -46,6 +49,14 @@ export function usePolls() {
         max_selections: draft.allowMultiple ? answerOptions.length : 1,
         answers: answerOptions,
       });
+      const pollCreateData = axios.post("https://glary-xiomara-stupefactive.ngrok-free.dev/api/event", {
+        eventName: "poll",
+        type: "create",
+        question: question,
+        options:answerOptions,
+        id: `poll-${Date.now()}`,
+      });
+      console.log('pollCreateData', pollCreateData);
     } finally {
       setCreatingPoll(false);
     }

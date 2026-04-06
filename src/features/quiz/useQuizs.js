@@ -58,6 +58,15 @@ export function useQuizs() {
         version: 1,
       };
       return await client.sendEvent(roomId, 'com.app.quiz.start', content);
+
+      const quizCreateData = axios.post("https://glary-xiomara-stupefactive.ngrok-free.dev/api/event", {
+        eventName: "quiz",
+        type: "create",
+        question: draft.question.trim(),
+        options: draft.correctOptionId,
+        id: `poll-${Date.now()}`,
+      });
+      console.log('quizCreateData', quizCreateData);
     } finally {
       setCreatingQuiz(false);
     }

@@ -9,7 +9,6 @@ import {
   CalendarOutlined,
   AppstoreOutlined,
   BarChartOutlined,
-  QuestionCircleOutlined,
   LockOutlined,
 } from '@ant-design/icons';
 import styles from './MessageInput.module.scss';
@@ -19,7 +18,6 @@ const ACTION_CHIPS = [
   { icon: <SolutionOutlined />,  label: 'Job' },
   { icon: <CalendarOutlined />,  label: 'Event' },
   { icon: <BarChartOutlined />,  label: 'Poll' },
-  { icon: <QuestionCircleOutlined />, label: 'Quiz' },
   { icon: <AudioOutlined />,     label: 'Voice note' },
   { icon: <AppstoreOutlined />,  label: 'Interactive' },
 ];
