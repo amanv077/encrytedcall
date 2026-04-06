@@ -84,6 +84,7 @@ export function usePollListener(client) {
       if (myMembership && myMembership !== 'join') return;
 
       const eventType = event.getType();
+      if (import.meta.env.DEV) console.log('EVENT TYPE:', eventType);
       if (eventType === 'm.room.encrypted') return;
 
       const eventId = event.getId();
@@ -149,6 +150,7 @@ export function usePollListener(client) {
         };
 
         if (!vote.answerId) return;
+        if (import.meta.env.DEV) console.log('[PollListener] saveVote payload:', vote);
         saveVote(vote).catch(() => console.error('[PollListener] saveVote failed'));
         dispatch({ type: 'polls/addVote', payload: vote }); // addVote
         return;

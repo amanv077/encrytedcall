@@ -3,13 +3,15 @@ import { Spin, Typography, Empty, Input, Modal } from 'antd';
 import { LockOutlined, SearchOutlined, CloseOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { storageService } from '../../utils/storageService';
-import { selectActiveRoomId } from '../../../../store/chatSlice';
+import { appendMessage, selectActiveRoomId } from '../../../../store/chatSlice';
 import { useChat } from '../../hooks/useChat';
 import { useTimeline } from '../../hooks/useTimeline';
 import { useRoomMembership } from '../../hooks/useRoomMembership';
 import { usePolls } from '../../hooks/usePolls';
+import { useQuizs } from '../../../quiz/useQuizs';
 import { addPoll, addVote, endPoll } from '../../../poll/pollSlice';
 import { getPollsByRoom, getVotesByPoll } from '../../../poll/pollDb';
+import { useQuizListener } from '../../../quiz/useQuizListener';
 import { roomService } from '../../utils/roomService';
 import { matrixManager } from '../../utils/matrixClient';
 import MessageBubble from '../MessageBubble/MessageBubble';
@@ -18,6 +20,8 @@ import InviteItem, { RoomInviteGate } from '../InviteItem/InviteItem';
 import MessageInput from '../MessageInput/MessageInput';
 import PollCard from '../PollCard/PollCard';
 import PollCreator from '../PollCreator/PollCreator';
+import QuizCreator from '../QuizCreator/QuizCreator';
+import QuizCard from '../QuizCard/QuizCard';
 import styles from './ChatPanel.module.scss';
 
 const { Text } = Typography;
@@ -82,6 +86,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const roomId = useSelector(selectActiveRoomId);
   const membership = useRoomMembership(roomId);
   const { createPoll, creatingPoll } = usePolls();
+  const { createQuiz, creatingQuiz, answerQuiz } = useQuizs();
 
   const { isLoading, isSending, hasMore, sendMessage, loadMore } = useChat(roomId);
   const timeline = useTimeline(roomId);
@@ -97,6 +102,9 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   const [isSearching, setIsSearching] = useState(false);
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [receiptVersion, setReceiptVersion] = useState(0);
+  const [quizModalOpen, setQuizModalOpen] = useState(false);
+  const [quizAnswersByQuiz, setQuizAnswersByQuiz] = useState({});
+  const reduxVotes = useSelector((state) => state?.polls?.votes || {});
 
   useEffect(() => {
     if (!roomId || membership !== 'join') return undefined;
@@ -110,6 +118,7 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
         const poll = polls[i];
         dispatch(addPoll(poll));
         const votes = await getVotesByPoll(poll.pollId);
+        if (import.meta.env.DEV) console.log('DB Votes:', votes);
         if (cancelled || !Array.isArray(votes)) continue;
         for (let j = 0; j < votes.length; j += 1) {
           dispatch(addVote(votes[j]));
@@ -125,6 +134,10 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
       cancelled = true;
     };
   }, [dispatch, membership, roomId]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) console.log('Redux Votes:', reduxVotes);
+  }, [reduxVotes]);
 
   // Clear search state whenever the panel is closed or room changes
   useEffect(() => {
@@ -180,6 +193,10 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
   }, [roomId, timeline]);
 
   const isEncrypted = roomId ? roomService.isRoomEncrypted(roomId) : false;
+  const client = matrixManager.getClient();
+  const myUserId = client?.getUserId?.() || null;
+
+  useQuizListener(client, roomId, setQuizAnswersByQuiz);
 
   // Force a lightweight re-compute when Matrix read receipts arrive.
   // Receipt events do not always change timeline length/content, so relying on
@@ -242,23 +259,78 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
     if (actionLabel === 'Poll') {
       setPollModalOpen(true);
     }
+    if (actionLabel === 'Quiz') {
+      setQuizModalOpen(true);
+    }
   }, []);
 
   const handleCreatePoll = useCallback(async (pollDraft) => {
     if (!roomId || !pollDraft) return;
     try {
-      await createPoll(roomId, pollDraft);
+      const res = await createPoll(roomId, pollDraft);
+      const eventId = res?.event_id || res?.eventId;
+      if (eventId) {
+        const client = matrixManager.getClient();
+        const sender = client?.getUserId?.() || 'me';
+        const senderName =
+          client?.getUser?.(sender)?.displayName ||
+          client?.getUser?.(sender)?.rawDisplayName ||
+          sender;
+        const options = (pollDraft.options || [])
+          .filter((o) => o?.label?.trim())
+          .map((o, idx) => ({
+            id: o.id || `opt_${idx + 1}`,
+            label: o.label.trim(),
+            votes: 0,
+          }));
+        dispatch(appendMessage({
+          roomId,
+          message: {
+            type: 'poll',
+            eventId,
+            roomId,
+            sender,
+            senderName,
+            timestamp: Date.now(),
+            isOutgoing: true,
+            poll: {
+              id: eventId,
+              roomId,
+              createdBy: sender,
+              question: (pollDraft.question || '').trim(),
+              options,
+              allowMultiple: Boolean(pollDraft.allowMultiple),
+              closed: false,
+              disableAfterSubmit: false,
+              allowVoteChange: true,
+              myVotes: [],
+            },
+          },
+        }));
+      }
       setPollModalOpen(false);
     } catch (err) {
       console.error('[ChatPanel] createPoll failed:', err);
     }
-  }, [createPoll, roomId]);
+  }, [createPoll, dispatch, roomId]);
 
   // Immediately mark opened conversation as read; keeps unread badge in sync.
   useEffect(() => {
     if (!roomId || membership !== 'join') return;
     matrixManager.markRoomAsRead(roomId);
   }, [roomId, membership, timeline.length]);
+  const handleCreateQuiz = useCallback(async (quizDraft) => {
+    if (!roomId || !quizDraft) return;
+    try {
+      const res = await createQuiz(roomId, quizDraft);
+      if (import.meta.env.DEV) {
+        console.log('[Quiz] com.app.quiz.start sent:', res?.event_id);
+      }
+      setQuizModalOpen(false);
+    } catch (err) {
+      console.error('[ChatPanel] createQuiz failed:', err?.message || err);
+    }
+  }, [createQuiz, roomId]);
 
   // ── Derive invite details for the gate ──────────────────────────────────────
   const inviteDetails = React.useMemo(() => {
@@ -471,6 +543,19 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
                     />
                   </div>
                 )}
+
+                {item.type === 'quiz' && item.quiz && (
+                  <div className={styles.pollTimelineItem}>
+                    <QuizCard
+                      quiz={item.quiz}
+                      roomId={roomId}
+                      allowChangeAfterSubmit
+                      onSubmitAnswer={answerQuiz}
+                      answersByUser={quizAnswersByQuiz[item.quiz.id] || {}}
+                      currentUserId={myUserId}
+                    />
+                  </div>
+                )}
               </React.Fragment>
             );
           })}
@@ -496,6 +581,17 @@ export default function ChatPanel({ onPlaceCall, isReady, msgSearchOpen, onClose
         width={640}
       >
         <PollCreator onCreate={handleCreatePoll} loading={creatingPoll} />
+      </Modal>
+
+      <Modal
+        title="Create Quiz"
+        open={quizModalOpen}
+        onCancel={() => setQuizModalOpen(false)}
+        footer={null}
+        destroyOnHidden
+        width={640}
+      >
+        <QuizCreator onCreate={handleCreateQuiz} loading={creatingQuiz} />
       </Modal>
     </div>
   );

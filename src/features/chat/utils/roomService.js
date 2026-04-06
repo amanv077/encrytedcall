@@ -101,11 +101,22 @@ class RoomService {
     }
 
     // --- 4. No room found — create a new DM room --------------------------
+    // Matrix does not encrypt rooms by default; polls / Rust crypto require
+    // an m.room.encryption state event (Megolm). Set it at creation time.
     const createRes = await client.createRoom({
       invite: [targetUserId],
       is_direct: true,
       preset: 'trusted_private_chat',
       visibility: 'private',
+      initial_state: [
+        {
+          type: 'm.room.encryption',
+          state_key: '',
+          content: {
+            algorithm: 'm.megolm.v1.aes-sha2',
+          },
+        },
+      ],
     });
 
     // Record in m.direct account data
@@ -210,6 +221,22 @@ class RoomService {
     const client = matrixManager.getClient();
     if (!client) return false;
     return client.isRoomEncrypted(roomId);
+  }
+
+  /**
+   * Turn on Megolm E2EE for a room that was created without encryption.
+   * Caller must have power to send m.room.encryption (usually room admin / creator).
+   * After this, wait for sync (or re-open the room) before relying on isRoomEncrypted().
+   */
+  async enableEncryptionForRoom(roomId) {
+    const client = matrixManager.getClient();
+    if (!client || !roomId) throw new Error('Matrix client or room id missing.');
+    if (typeof client.isRoomEncrypted === 'function' && client.isRoomEncrypted(roomId)) {
+      return;
+    }
+    await client.sendStateEvent(roomId, 'm.room.encryption', '', {
+      algorithm: 'm.megolm.v1.aes-sha2',
+    });
   }
 }
 

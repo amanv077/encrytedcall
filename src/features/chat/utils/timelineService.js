@@ -41,6 +41,10 @@ export function normalizeMatrixEvent(event, myUserId) {
   const isOutgoing = sender === myUserId;
   const type = event.getType();
   const content = event.getContent() || {};
+  const txnId =
+    (typeof event.getTxnId === 'function' && event.getTxnId()) ||
+    event.getUnsigned?.()?.transaction_id ||
+    null;
 
   const readExtText = (value) => {
     if (!value) return '';
@@ -63,6 +67,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'message',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
@@ -83,6 +88,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'message',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
@@ -115,6 +121,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'poll',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
@@ -148,6 +155,50 @@ export function normalizeMatrixEvent(event, myUserId) {
     };
   }
 
+  if (type === 'm.poll.response' || type === 'org.matrix.msc3381.poll.response') {
+    // Vote events update existing poll state only; never render as timeline item.
+    return null;
+  }
+
+  // ── Quiz events ───────────────────────────────────────────────────────────
+  if (type === 'com.app.quiz.start') {
+    const question = typeof content.question === 'string' ? content.question.trim() : '';
+    const answers = Array.isArray(content.options) ? content.options : [];
+    const options = answers
+      .map((ans, idx) => ({
+        id: ans?.id || `opt_${idx + 1}`,
+        label: (ans?.text || ans?.label || '').trim(),
+        votes: 0,
+      }))
+      .filter((opt) => opt.label);
+
+    if (!question || options.length < 2) return null;
+
+    return {
+      type: 'quiz',
+      eventId,
+      txnId,
+      roomId,
+      sender,
+      senderName,
+      timestamp,
+      isOutgoing,
+      quiz: {
+        id: eventId,
+        roomId,
+        createdBy: sender,
+        question,
+        options,
+        correctOptionId: content.correct_option_id || null,
+      },
+    };
+  }
+
+  if (type === 'com.app.quiz.answer') {
+    // Answer events update existing quiz state; do not render standalone item.
+    return null;
+  }
+
   // ── Call events ───────────────────────────────────────────────────────────
   if (type === 'm.call.invite') {
     const offerType = content?.offer?.type;
@@ -157,6 +208,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'call',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
@@ -172,6 +224,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'call',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
@@ -193,6 +246,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'call',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
@@ -208,6 +262,7 @@ export function normalizeMatrixEvent(event, myUserId) {
     return {
       type: 'call',
       eventId,
+      txnId,
       roomId,
       sender,
       senderName,
